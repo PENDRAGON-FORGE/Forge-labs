@@ -24,10 +24,7 @@ export async function saveDocument(input: {
     .select()
     .single();
 
-  if (error) {
-    return { error: error.message };
-  }
-
+  if (error) return { error: error.message };
   return { data };
 }
 
@@ -37,9 +34,33 @@ export async function listDocuments() {
     .select('id,title,template,status,created_at')
     .order('created_at', { ascending: false });
 
-  if (error) {
-    return { error: error.message, data: [] };
-  }
-
+  if (error) return { error: error.message, data: [] };
   return { data: data || [] };
+}
+
+export async function getDocumentById(id: string) {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('id,title,template,content,status,created_at,updated_at')
+    .eq('id', id)
+    .single();
+
+  if (error) return { error: error.message };
+  return { data };
+}
+
+export async function updateDocument(input: { id: string; title: string; content: string }) {
+  const { data, error } = await supabase
+    .from('documents')
+    .update({
+      title: input.title,
+      content: input.content,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', input.id)
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  return { data };
 }

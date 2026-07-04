@@ -4,7 +4,8 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/new-document', label: 'Nuevo documento' },
   { href: '/history', label: 'Historial' },
-  { href: '/settings', label: 'Configuracion' }
+  { href: '/settings', label: 'Configuracion' },
+  { href: '/login', label: 'Login' }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

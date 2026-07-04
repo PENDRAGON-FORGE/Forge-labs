@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
 type AuthMode = 'login' | 'register';
 
 export function AuthForm({ mode }: { mode: AuthMode }) {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -24,7 +26,12 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       return;
     }
 
-    setMessage(isLogin ? 'Sesion iniciada.' : 'Cuenta creada. Revisa tu correo si Supabase requiere confirmacion.');
+    if (isLogin) {
+      router.replace('/dashboard');
+      return;
+    }
+
+    setMessage('Cuenta creada. Revisa tu correo si Supabase requiere confirmacion.');
   }
 
   return (

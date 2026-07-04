@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/AppShell';
+import { mockDocuments } from '@/lib/mockDocuments';
 
 export default function HistoryPage() {
   return (
@@ -7,13 +8,22 @@ export default function HistoryPage() {
         <div>
           <p className="eyebrow">Archivo</p>
           <h2>Historial</h2>
-          <p className="muted">Aqui apareceran los documentos generados y sus versiones.</p>
+          <p className="muted">Documentos recientes del workspace.</p>
         </div>
-      </div>
-      <div className="card empty-state">
-        <h3>Aun no hay documentos</h3>
-        <p className="muted">Genera tu primer documento para verlo en el historial.</p>
         <a className="primary-button" href="/new-document">Crear documento</a>
+      </div>
+
+      <div className="history-list">
+        {mockDocuments.map((document) => (
+          <article className="card history-item" key={document.id}>
+            <div>
+              <p className="eyebrow">{document.template}</p>
+              <h3>{document.title}</h3>
+              <p className="muted">Creado: {document.createdAt}</p>
+            </div>
+            <span className="status-pill">{document.status}</span>
+          </article>
+        ))}
       </div>
     </AppShell>
   );

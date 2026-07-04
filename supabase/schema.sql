@@ -47,3 +47,23 @@ create table ai_usage_logs (
   credits_used integer default 0,
   created_at timestamptz default now()
 );
+
+alter table profiles enable row level security;
+alter table documents enable row level security;
+alter table document_versions enable row level security;
+alter table ai_usage_logs enable row level security;
+
+create policy profiles_select_own on profiles for select using (id = auth.uid());
+create policy profiles_update_own on profiles for update using (id = auth.uid());
+
+create policy documents_select_own on documents for select using (owner_id = auth.uid());
+create policy documents_insert_own on documents for insert with check (owner_id = auth.uid());
+create policy documents_update_own on documents for update using (owner_id = auth.uid());
+create policy documents_delete_own on documents for delete using (owner_id = auth.uid());
+
+create policy versions_select_own on document_versions for select using (
+  exists (select 1 from documents where documents.id = document_versions.document_id and documents.owner_id = auth.uid())
+);
+
+create policy usage_select_own on ai_usage_logs for select using (user_id = auth.uid());
+create policy usage_insert_own on ai_usage_logs for insert with check (user_id = auth.uid());

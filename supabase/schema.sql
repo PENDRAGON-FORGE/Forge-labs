@@ -5,7 +5,7 @@ create table organizations (
 );
 
 create table profiles (
-  id uuid primary key,
+  id uuid primary key references auth.users(id) on delete cascade,
   organization_id uuid references organizations(id),
   email text,
   full_name text,
@@ -48,12 +48,29 @@ create table ai_usage_logs (
   created_at timestamptz default now()
 );
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, full_name)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', ''));
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute procedure public.handle_new_user();
+
 alter table profiles enable row level security;
 alter table documents enable row level security;
 alter table document_versions enable row level security;
 alter table ai_usage_logs enable row level security;
 
 create policy profiles_select_own on profiles for select using (id = auth.uid());
+create policy profiles_insert_own on profiles for insert with check (id = auth.uid());
 create policy profiles_update_own on profiles for update using (id = auth.uid());
 
 create policy documents_select_own on documents for select using (owner_id = auth.uid());

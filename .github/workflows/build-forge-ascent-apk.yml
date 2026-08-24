@@ -1,13 +1,8 @@
 name: Build FORGE ASCENT APK
 
 on:
-  push:
-    branches: ["forge-ascent-android"]
-    paths:
-      - "apps/forge-ascent/**"
-      - ".github/workflows/build-forge-ascent-apk.yml"
   pull_request:
-    branches: ["main"]
+    branches: ["forge-ascent-ci-base"]
     paths:
       - "apps/forge-ascent/**"
       - ".github/workflows/build-forge-ascent-apk.yml"
@@ -32,7 +27,7 @@ jobs:
           cache-dependency-path: apps/forge-ascent/package.json
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -40,7 +35,7 @@ jobs:
       - name: Restore bundled web assets
         run: |
           rm -rf www
-          base64 --decode www.zip.b64 > www.zip
+          cat www.part1.b64 www.part2.b64 www.part3.b64 | base64 --decode > www.zip
           unzip -q www.zip
           test -f www/index.html
 

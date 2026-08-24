@@ -32,6 +32,13 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Restore bundled web assets
+        run: |
+          rm -rf www
+          base64 --decode www.zip.b64 > www.zip
+          unzip -q www.zip
+          test -f www/index.html
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 

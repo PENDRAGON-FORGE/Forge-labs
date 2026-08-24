@@ -1,0 +1,8 @@
+{
+  "appId": "com.pendragonforge.forgeascent.v2",
+  "appName": "FORGE ASCENT",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

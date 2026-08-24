@@ -1,0 +1,59 @@
+name: Build FORGE ASCENT APK
+
+on:
+  push:
+    branches: ["forge-ascent-android"]
+    paths:
+      - "apps/forge-ascent/**"
+      - ".github/workflows/build-forge-ascent-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/forge-ascent
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/forge-ascent/package.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Sync web assets
+        run: npx cap sync android
+
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Copy APK with friendly name
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v1.5-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FORGE_ASCENT_v1.5_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v1.5-debug.apk
+          if-no-files-found: error
+          retention-days: 30

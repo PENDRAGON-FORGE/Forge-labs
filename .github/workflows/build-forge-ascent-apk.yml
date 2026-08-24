@@ -6,6 +6,11 @@ on:
     paths:
       - "apps/forge-ascent/**"
       - ".github/workflows/build-forge-ascent-apk.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "apps/forge-ascent/**"
+      - ".github/workflows/build-forge-ascent-apk.yml"
   workflow_dispatch:
 
 jobs:

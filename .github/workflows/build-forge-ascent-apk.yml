@@ -34,11 +34,13 @@ jobs:
 
       - name: Restore FORGE ASCENT v2 web bundle
         run: |
-          rm -rf www
-          unzip -t www-v2.zip
+          rm -rf www bundle-v2.zip
+          base64 --decode www-v2.zip > bundle-v2.zip
+          unzip -t bundle-v2.zip
           mkdir -p www
-          unzip -q www-v2.zip -d www
+          unzip -q bundle-v2.zip -d www
           test -f www/index.html
+          test -f www/app.js
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund

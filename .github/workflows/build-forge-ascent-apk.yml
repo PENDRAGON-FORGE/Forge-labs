@@ -40,15 +40,17 @@ jobs:
           a2e48fa8d4b08aa0d02ee7f41f96d64e34e18e17  payload-v2/q02.b64
           450851ee4d9f8954d40d2326587f8150147af6ef  payload-v2/q03.b64
           a24a24c0bc7f99bbe22789993603ab344d3e2dce  payload-v2/q04.b64
-          d7e0dcba288a3bba84e5b1be99eb3ea05bc13f54  payload-v2/q05a.b64
-          8762ca2daec2dc810d8942660e68197becd33349  payload-v2/s05b.b64
+          cf1444bad7cb2176e0feff2b43b748849e498792  payload-v2/t05_1.b64
+          7b28bc2a34eb8bb905771e2a8f19626c4ba29813  payload-v2/t05_2.b64
+          bdaa73f3d5dd4f7bb3d4dbcb67b3c3cfd1548e3c  payload-v2/t05_3.b64
+          17b2b3cd82a91502f0782637434259c0856202f6  payload-v2/t05_4.b64
           6a21170f15bb66c147cb8efaebfea268dc247cbb  payload-v2/s06a.b64
           30ca16520af39e08ea4e144c88f085af59860f90  payload-v2/s06b.b64
           4c53af0b63c1b25a45b13328eea08dcd09a58a0d  payload-v2/s07a.b64
           d355322c0fcb82badb468fda37038898215d3bb0  payload-v2/s07b.b64
           EOF
           sha1sum -c payload-v2/SHA1SUMS
-          cat payload-v2/p01.b64 payload-v2/q02.b64 payload-v2/q03.b64 payload-v2/q04.b64 payload-v2/q05a.b64 payload-v2/s05b.b64 payload-v2/s06a.b64 payload-v2/s06b.b64 payload-v2/s07a.b64 payload-v2/s07b.b64 > bundle-v2.b64
+          cat payload-v2/p01.b64 payload-v2/q02.b64 payload-v2/q03.b64 payload-v2/q04.b64 payload-v2/t05_1.b64 payload-v2/t05_2.b64 payload-v2/t05_3.b64 payload-v2/t05_4.b64 payload-v2/s06a.b64 payload-v2/s06b.b64 payload-v2/s07a.b64 payload-v2/s07b.b64 > bundle-v2.b64
           base64 --decode bundle-v2.b64 > bundle-v2.zip
           echo "b04029b6579866ac171f50a6765d30019d576f5a1c88ccaf89ad2eea49bf40ab  bundle-v2.zip" | sha256sum -c -
           unzip -t bundle-v2.zip

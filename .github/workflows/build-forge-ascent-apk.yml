@@ -2,7 +2,7 @@ name: Build FORGE ASCENT APK
 
 on:
   pull_request:
-    branches: ["forge-ascent-ci-base"]
+    branches: ["forge-ascent-v201-ci-base"]
     paths:
       - "apps/forge-ascent/**"
       - ".github/workflows/build-forge-ascent-apk.yml"
@@ -63,34 +63,13 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
-          # 1) Persist onboarding state through the normalized store.
           ds = Path("www/data-store.js")
           s = ds.read_text(encoding="utf-8")
-          s = s.replace(
-              '    schemaVersion: SCHEMA_VERSION,\n    profile: {',
-              '    schemaVersion: SCHEMA_VERSION,\n    ui: { onboardingComplete: false },\n    profile: {',
-              1,
-          )
-          s = s.replace(
-              '    } else {\n      Object.assign(d.profile, source.profile||{});',
-              '    } else {\n      Object.assign(d.ui, source.ui||{});\n      Object.assign(d.profile, source.profile||{});',
-              1,
-          )
-          s = s.replace(
-              '      schemaVersion:SCHEMA_VERSION,\n      profile:{...d.profile,...(s.profile||{})},',
-              '      schemaVersion:SCHEMA_VERSION,\n      ui:{...d.ui,...(s.ui||{})},\n      profile:{...d.profile,...(s.profile||{})},',
-              1,
-          )
-          s = s.replace(
-              '    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',
-              '    out.ui.onboardingComplete = Boolean(out.ui.onboardingComplete);\n    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',
-              1,
-          )
+          s = s.replace('    schemaVersion: SCHEMA_VERSION,\n    profile: {','    schemaVersion: SCHEMA_VERSION,\n    ui: { onboardingComplete: false },\n    profile: {',1)
+          s = s.replace('    } else {\n      Object.assign(d.profile, source.profile||{});','    } else {\n      Object.assign(d.ui, source.ui||{});\n      Object.assign(d.profile, source.profile||{});',1)
+          s = s.replace('      schemaVersion:SCHEMA_VERSION,\n      profile:{...d.profile,...(s.profile||{})},','      schemaVersion:SCHEMA_VERSION,\n      ui:{...d.ui,...(s.ui||{})},\n      profile:{...d.profile,...(s.profile||{})},',1)
+          s = s.replace('    out.profile.age = Math.floor(number(out.profile.age,13,100,33));','    out.ui.onboardingComplete = Boolean(out.ui.onboardingComplete);\n    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',1)
           ds.write_text(s, encoding="utf-8")
-
-          # 2) The original scripts execute before the onboarding HTML exists.
-          # Bind controls after DOMContentLoaded so the buttons really exist.
           app = Path("www/app.js")
           a = app.read_text(encoding="utf-8")
           a += r'''
@@ -99,19 +78,10 @@ jobs:
           (function bindForgeAscentOnboardingAfterDom(){
             function bind(){
               const currentStep=()=>Number(document.querySelector('.onboarding-step:not(.hidden)')?.dataset.step||0);
-              document.querySelectorAll('.onboarding-next').forEach(btn=>{
-                btn.type='button';
-                btn.onclick=()=>showOnboardingStep(currentStep()+1);
-              });
-              document.querySelectorAll('.onboarding-prev').forEach(btn=>{
-                btn.type='button';
-                btn.onclick=()=>showOnboardingStep(currentStep()-1);
-              });
+              document.querySelectorAll('.onboarding-next').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()+1);});
+              document.querySelectorAll('.onboarding-prev').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()-1);});
               const finish=document.getElementById('onboardingFinish');
-              if(finish){
-                finish.type='button';
-                finish.onclick=finishOnboarding;
-              }
+              if(finish){finish.type='button';finish.onclick=finishOnboarding;}
             }
             if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind,{once:true});
             else bind();

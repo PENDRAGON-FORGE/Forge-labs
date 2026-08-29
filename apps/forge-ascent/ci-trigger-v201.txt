@@ -1,1 +1,1 @@
-FORGE ASCENT v2.0.4 aligned manual/guided session audit build
+FORGE ASCENT v2.0.5 analytics/null-data integrity audit build

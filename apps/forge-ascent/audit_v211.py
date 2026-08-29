@@ -39,8 +39,8 @@ a=once(a,
 
 # 3) Physical tests: one rewarded record per 4-week cycle; future cycles stay locked.
 a=once(a,
-'  if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n  const i=state.tests.findIndex(x=>x.id===t.id);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}',
-'  if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n  if(t.cycle*4>view.activeWeek){$("testMsg").textContent=`El ciclo ${t.cycle} se habilita al llegar a la semana ${t.cycle*4}.`;return}\n  t.id=`cycle-${t.cycle}`;const i=state.tests.findIndex(x=>Number(x.cycle)===t.cycle);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}',
+'if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n const i=state.tests.findIndex(x=>x.id===t.id);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}',
+'if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n if(t.cycle*4>view.activeWeek){$("testMsg").textContent=`El ciclo ${t.cycle} se habilita al llegar a la semana ${t.cycle*4}.`;return}\n t.id=`cycle-${t.cycle}`;const i=state.tests.findIndex(x=>Number(x.cycle)===t.cycle);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}',
 'test cycle reward lock')
 
 ap.write_text(a,encoding='utf-8')

@@ -22,19 +22,14 @@ a=once(a,
 'perfect achievements')
 
 # 2) Explicit derived program-complete state on the main dashboard.
-anchor='function refresh(){const session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);'
-replacement='function programComplete(){return view.completedWeeks.includes(24)}\nfunction refresh(){const done=programComplete(),session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);'
-a=once(a,anchor,replacement,'program complete helper')
 a=once(a,
-'$("week").textContent=`${view.activeWeek}/24`;$ ("sessions")',
-'$("week").textContent=done?"24/24 · COMPLETADO":`${view.activeWeek}/24`;$ ("sessions")',
-'week dashboard completed state') if '$("week").textContent=`${view.activeWeek}/24`;$ ("sessions")' in a else a
-# Exact minified anchor used by current build.
+'function refresh(){const session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);',
+'function programComplete(){return view.completedWeeks.includes(24)}\nfunction refresh(){const done=programComplete(),session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);',
+'program complete helper')
 a=once(a,
-'$("week").textContent=`${view.activeWeek}/24`;$ ("sessions")'.replace('$ (','$('),
-'$("week").textContent=done?"24/24 · COMPLETADO":`${view.activeWeek}/24`;$ ("sessions")'.replace('$ (','$('),
-'week dashboard completed state') if '$("week").textContent=`${view.activeWeek}/24`;$(' in a else a
-
+'$("week").textContent=`${view.activeWeek}/24`;$('+'"sessions"'+')',
+'$("week").textContent=done?"24/24 · COMPLETADO":`${view.activeWeek}/24`;$('+'"sessions"'+')',
+'week dashboard completed state')
 a=once(a,
 '$("mission").textContent=`Semana ${view.activeWeek} · ${session.name}`;if($("heroMission"))$("heroMission").textContent=`Semana ${view.activeWeek} · ${session.name}`;if($("heroStatus"))$("heroStatus").textContent=`${modeLabel(session.decision.mode)} · ${session.items.length} bloques`;',
 '$("mission").textContent=done?"ASCENSO COMPLETO":`Semana ${view.activeWeek} · ${session.name}`;if($("heroMission"))$("heroMission").textContent=done?"ASCENSO COMPLETO":`Semana ${view.activeWeek} · ${session.name}`;if($("heroStatus"))$("heroStatus").textContent=done?"PROGRAMA CERRADO":`${modeLabel(session.decision.mode)} · ${session.items.length} bloques`;',

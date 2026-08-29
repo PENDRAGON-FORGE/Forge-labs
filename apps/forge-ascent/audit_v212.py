@@ -21,13 +21,9 @@ a=a.replace(anchor,insert+'\n'+anchor,1)
 # 2) Render achievements during refresh and after meaningful state changes.
 a=once(a,'renderHistory();','renderHistory();renderAchievements();','achievement refresh')
 
-# 3) Add achievements panel to Operator view.
+# 3) Add achievements panel before the existing data section.
 ip=Path('www/index.html')
 h=ip.read_text(encoding='utf-8')
-anchor='<div id="operatorRank"'
-pos=h.find(anchor)
-if pos<0: raise SystemExit('operator panel anchor missing')
-# insert panel before operatorRank parent area conservatively by using data section marker
 marker='<section id="data"'
 if marker not in h: raise SystemExit('data section anchor missing')
 panel='''<section class="card" id="achievementsPanel"><h3>Logros</h3><div id="achievementsList" class="stack"><div class="muted">Aún no hay logros desbloqueados.</div></div></section>\n'''
@@ -37,11 +33,9 @@ ip.write_text(h,encoding='utf-8')
 # 4) Store normalization: achievements are never trusted from import; always derived at runtime.
 ds=Path('www/data-store.js')
 s=ds.read_text(encoding='utf-8')
-# replace normalized achievements assignment if present, otherwise force after tests normalize block
 if 'achievements:' in s:
     import re
     s=re.sub(r'achievements\s*:\s*Array\.isArray\([^\n]+\)\?[^\n]+,','achievements: [],',s,count=1)
-# static fallback: ensure normalized output clears any imported list
 anchor='out.tests = out.tests'
 if anchor in s and 'out.achievements=[];' not in s:
     s=s.replace(anchor,'out.achievements=[];\n    '+anchor,1)

@@ -18,37 +18,42 @@ a=once(a,
 'future week activation guard')
 
 # 2) Partial-session retries may improve a slot, but only the incremental completion earns XP.
-old=''' const checks=[...document.querySelectorAll(".check")],done=checks.filter(x=>x.checked).length,current=daysFor(),session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);\n if(current.includes(activeDay)){$("workoutMsg").textContent="Misión ya contabilizada para esta semana.";return}'''
-new=''' const checks=[...document.querySelectorAll(".check")],done=checks.filter(x=>x.checked).length,current=daysFor(),session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);\n const priorBest=Math.max(0,...view.sessionLogs.filter(x=>Number(x.week)===view.activeWeek&&Number(x.day)===activeDay+1).map(x=>Number(x.completion)||0));\n if(current.includes(activeDay)){$("workoutMsg").textContent="Misión ya contabilizada para esta semana.";return}'''
-a=once(a,old,new,'manual prior completion')
-old=''' view.sessionLogs.push(log);if(completion>=.70)view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=Math.round(session.xp*completion);\n save();$("workoutMsg").textContent=completion>=.70?`Sesión guardada · ${duration} min · +${Math.round(session.xp*completion)} EXP.`:`Sesión parcial guardada (${Math.round(completion*100)}%) · +${Math.round(session.xp*completion)} EXP. No cuenta aún como misión semanal.`;resetSessionForm();refresh();'''
-new=''' const priorCredit=Math.round(session.xp*Math.min(1,priorBest)),newCredit=Math.round(session.xp*Math.min(1,completion)),xpEarned=Math.max(0,newCredit-priorCredit);\n view.sessionLogs.push(log);if(completion>=.70)view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=xpEarned;\n save();$("workoutMsg").textContent=completion>=.70?`Sesión guardada · ${duration} min · +${xpEarned} EXP.`:`Sesión parcial guardada (${Math.round(completion*100)}%) · +${xpEarned} EXP incremental. No cuenta aún como misión semanal.`;resetSessionForm();refresh();'''
-a=once(a,old,new,'manual incremental XP')
+a=once(a,
+' const checks=[...document.querySelectorAll(".check")],done=checks.filter(x=>x.checked).length,current=daysFor(),session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);\n if(current.includes(activeDay)){$("workoutMsg").textContent="Misión ya contabilizada para esta semana.";return}',
+' const checks=[...document.querySelectorAll(".check")],done=checks.filter(x=>x.checked).length,current=daysFor(),session=ENGINE.buildSession(activeDay,view.activeWeek,state,DATA);\n const priorBest=Math.max(0,...view.sessionLogs.filter(x=>Number(x.week)===view.activeWeek&&Number(x.day)===activeDay+1).map(x=>Number(x.completion)||0));\n if(current.includes(activeDay)){$("workoutMsg").textContent="Misión ya contabilizada para esta semana.";return}',
+'manual prior completion')
+a=once(a,
+' view.sessionLogs.push(log);if(completion>=.70)view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=Math.round(session.xp*completion);\n save();$("workoutMsg").textContent=completion>=.70?`Sesión guardada · ${duration} min · +${Math.round(session.xp*completion)} EXP.`:`Sesión parcial guardada (${Math.round(completion*100)}%) · +${Math.round(session.xp*completion)} EXP. No cuenta aún como misión semanal.`;resetSessionForm();refresh();',
+' const priorCredit=Math.round(session.xp*Math.min(1,priorBest)),newCredit=Math.round(session.xp*Math.min(1,completion)),xpEarned=Math.max(0,newCredit-priorCredit);\n view.sessionLogs.push(log);if(completion>=.70)view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=xpEarned;\n save();$("workoutMsg").textContent=completion>=.70?`Sesión guardada · ${duration} min · +${xpEarned} EXP.`:`Sesión parcial guardada (${Math.round(completion*100)}%) · +${xpEarned} EXP incremental. No cuenta aún como misión semanal.`;resetSessionForm();refresh();',
+'manual incremental XP')
 
 # Guided completion after a partial manual attempt only earns the remaining slot XP.
-old=''' const current=view.weekProgress[String(view.activeWeek)]||[];\n if(current.includes(activeDay)){ $("closeoutMsg").textContent="Esta misión ya está registrada para hoy."; return; }\n const now=new Date(), end=now.toTimeString().slice(0,5);'''
-new=''' const current=view.weekProgress[String(view.activeWeek)]||[];\n if(current.includes(activeDay)){ $("closeoutMsg").textContent="Esta misión ya está registrada para hoy."; return; }\n const priorBest=Math.max(0,...view.sessionLogs.filter(x=>Number(x.week)===view.activeWeek&&Number(x.day)===activeDay+1).map(x=>Number(x.completion)||0));\n const now=new Date(), end=now.toTimeString().slice(0,5);'''
-a=once(a,old,new,'guided prior completion')
-old=''' view.sessionLogs.push(log);view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=Math.round(s.xp||0);\n STORE.save(state);\n $("missionCloseout").classList.add("hidden");$("missionComplete").classList.remove("hidden");\n $("completeXp").textContent=`+${s.xp||0} EXP`;'''
-new=''' const fullCredit=Math.round(s.xp||0),priorCredit=Math.round(fullCredit*Math.min(1,priorBest)),xpEarned=Math.max(0,fullCredit-priorCredit);\n view.sessionLogs.push(log);view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=xpEarned;\n STORE.save(state);\n $("missionCloseout").classList.add("hidden");$("missionComplete").classList.remove("hidden");\n $("completeXp").textContent=`+${xpEarned} EXP`;'''
-a=once(a,old,new,'guided incremental XP')
+a=once(a,
+' const current=view.weekProgress[String(view.activeWeek)]||[];\n if(current.includes(activeDay)){ $("closeoutMsg").textContent="Esta misión ya está registrada para hoy."; return; }\n const now=new Date(), end=now.toTimeString().slice(0,5);',
+' const current=view.weekProgress[String(view.activeWeek)]||[];\n if(current.includes(activeDay)){ $("closeoutMsg").textContent="Esta misión ya está registrada para hoy."; return; }\n const priorBest=Math.max(0,...view.sessionLogs.filter(x=>Number(x.week)===view.activeWeek&&Number(x.day)===activeDay+1).map(x=>Number(x.completion)||0));\n const now=new Date(), end=now.toTimeString().slice(0,5);',
+'guided prior completion')
+a=once(a,
+' view.sessionLogs.push(log);view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=Math.round(s.xp||0);\n STORE.save(state);\n $("missionCloseout").classList.add("hidden");$("missionComplete").classList.remove("hidden");\n $("completeXp").textContent=`+${s.xp||0} EXP`;',
+' const fullCredit=Math.round(s.xp||0),priorCredit=Math.round(fullCredit*Math.min(1,priorBest)),xpEarned=Math.max(0,fullCredit-priorCredit);\n view.sessionLogs.push(log);view.weekProgress[String(view.activeWeek)]=[...current,activeDay];view.sessions++;view.xp+=xpEarned;\n STORE.save(state);\n $("missionCloseout").classList.add("hidden");$("missionComplete").classList.remove("hidden");\n $("completeXp").textContent=`+${xpEarned} EXP`;',
+'guided incremental XP')
 
 # 3) Physical tests: one rewarded record per 4-week cycle; future cycles stay locked.
-old='''  if(!t.date||Object.values(t).some(v=>typeof v==="number"&&!Number.isFinite(v))){$("testMsg").textContent="Revisa los campos de la prueba.";return}\n  if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n  const i=state.tests.findIndex(x=>x.id===t.id);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}'''
-new='''  if(!t.date||Object.values(t).some(v=>typeof v==="number"&&!Number.isFinite(v))){$("testMsg").textContent="Revisa los campos de la prueba.";return}\n  if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n  if(t.cycle*4>view.activeWeek){$("testMsg").textContent=`El ciclo ${t.cycle} se habilita al llegar a la semana ${t.cycle*4}.`;return}\n  t.id=`cycle-${t.cycle}`;const i=state.tests.findIndex(x=>Number(x.cycle)===t.cycle);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}'''
-a=once(a,old,new,'test cycle reward lock')
+a=once(a,
+'  if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n  const i=state.tests.findIndex(x=>x.id===t.id);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}',
+'  if(t.pain>=5){$("testMsg").textContent="Prueba no guardada como válida: dolor demasiado alto.";return}\n  if(t.cycle*4>view.activeWeek){$("testMsg").textContent=`El ciclo ${t.cycle} se habilita al llegar a la semana ${t.cycle*4}.`;return}\n  t.id=`cycle-${t.cycle}`;const i=state.tests.findIndex(x=>Number(x.cycle)===t.cycle);if(i>=0)state.tests[i]=t;else{state.tests.push(t);view.xp+=100}',
+'test cycle reward lock')
 
 ap.write_text(a,encoding='utf-8')
 
 # 4) Sanitize completedWeeks against real weekly progress on save/import, and keep activeWeek consistent.
 ds=Path('www/data-store.js')
 s=ds.read_text(encoding='utf-8')
-anchor='''    out.progression.sessions = Math.max(out.progression.sessions, out.sessionLogs.length);\n    out.reviews.sort((a,b)=>a.date.localeCompare(b.date));'''
-replacement='''    out.progression.completedWeeks = out.progression.completedWeeks.filter(w=>(out.progression.weekProgress[String(w)]||[]).length>=4);\n    if(out.progression.completedWeeks.length){const next=Math.min(24,Math.max(...out.progression.completedWeeks)+1);out.progression.activeWeek=Math.max(out.progression.activeWeek,next);out.progression.selectedWeek=Math.max(out.progression.selectedWeek,out.progression.activeWeek)}\n    out.progression.sessions = Math.max(out.progression.sessions, out.sessionLogs.length);\n    out.reviews.sort((a,b)=>a.date.localeCompare(b.date));'''
-s=once(s,anchor,replacement,'completed week reconciliation')
+s=once(s,
+'    out.progression.sessions = Math.max(out.progression.sessions, out.sessionLogs.length);\n    out.reviews.sort((a,b)=>a.date.localeCompare(b.date));',
+'    out.progression.completedWeeks = out.progression.completedWeeks.filter(w=>(out.progression.weekProgress[String(w)]||[]).length>=4);\n    if(out.progression.completedWeeks.length){const next=Math.min(24,Math.max(...out.progression.completedWeeks)+1);out.progression.activeWeek=Math.max(out.progression.activeWeek,next);out.progression.selectedWeek=Math.max(out.progression.selectedWeek,out.progression.activeWeek)}\n    out.progression.sessions = Math.max(out.progression.sessions, out.sessionLogs.length);\n    out.reviews.sort((a,b)=>a.date.localeCompare(b.date));',
+'completed week reconciliation')
 ds.write_text(s,encoding='utf-8')
 
-# Static guarantees.
 checks=[
  ('future activation guard','Cierra primero la semana ${view.activeWeek}' in a),
  ('manual incremental XP','xpEarned=Math.max(0,newCredit-priorCredit)' in a),

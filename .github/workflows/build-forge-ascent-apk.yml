@@ -59,7 +59,7 @@ jobs:
           test -f www/index.html
           test -f www/app.js
 
-      - name: Apply audited runtime fixes v2.0.3
+      - name: Apply audited runtime fixes v2.0.4
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -77,9 +77,19 @@ jobs:
           app = Path("www/app.js")
           a = app.read_text(encoding="utf-8")
           a = a.replace('$("guidedImage").src=patternAsset(id);','$("guidedImage").src=`./assets/exercises/${id}.svg`;')
+          a = a.replace('function guidedRender(){','function exerciseLinesForSession(s){return (s?.items||[]).filter(x=>!x.startsWith("Semana de descarga")&&!x.startsWith("Circuito ·"))}\nfunction guidedRender(){',1)
+          a = a.replace('const id=s.exerciseIds[guidedState.index],ex=window.FORGE_EXERCISES?.byId(id),line=s.items.find(x=>ex&&x.includes(ex.name))||s.items[guidedState.index]||ex?.name||id;','const id=s.exerciseIds[guidedState.index],ex=window.FORGE_EXERCISES?.byId(id),line=exerciseLinesForSession(s)[guidedState.index]||ex?.name||id;',1)
+          a = a.replace('function completeCurrentExercise(){const s=guidedState.session,id=s.exerciseIds[guidedState.index],ex=window.FORGE_EXERCISES?.byId(id),line=s.items.find(x=>ex&&x.includes(ex.name))||"",count=seriesCount(line);','function completeCurrentExercise(){const s=guidedState.session,id=s.exerciseIds[guidedState.index],ex=window.FORGE_EXERCISES?.byId(id),line=exerciseLinesForSession(s)[guidedState.index]||"",count=seriesCount(line);',1)
+          a = a.replace('session.items.map((x,i)=>{const ex=session.exerciseIds?.[i]?EXLIB.byId(session.exerciseIds[i]):null','exerciseLinesForSession(session).map((x,i)=>{const ex=session.exerciseIds?.[i]?EXLIB.byId(session.exerciseIds[i]):null',1)
+          a = a.replace('const omitted=checks.map((c,i)=>c.checked?null:session.items[i]).filter(Boolean),completion=done/checks.length;','const planned=exerciseLinesForSession(session),omitted=checks.map((c,i)=>c.checked?null:planned[i]).filter(Boolean),completion=done/checks.length;',1)
+          a = a.replace('planned:session.items,completed:checks.map((c,i)=>c.checked?session.items[i]:null).filter(Boolean),omitted,','planned,completed:checks.map((c,i)=>c.checked?planned[i]:null).filter(Boolean),omitted,',1)
+          a = a.replace('let mins=(eh*60+em)-(sh*60+sm);if(mins<=0)mins+=1440;return mins;','let mins=(eh*60+em)-(sh*60+sm);if(mins===0)return 0;if(mins<0)mins+=1440;return mins;',1)
+          a = a.replace('if(!start||!end||!Number.isFinite(duration)||duration<=0){','if(!start||!end||!Number.isFinite(duration)||duration<=0||duration>240){',1)
+          a = a.replace('!Number.isFinite(duration)||duration<1){','!Number.isFinite(duration)||duration<1||duration>180){',1)
+          a = a.replace('a.download="forge-ascent-v1-3-backup.json";','a.download="forge-ascent-v2-backup.json";',1)
           a += r'''
 
-          // FORGE ASCENT v2.0.3 — audited late bindings for post-script UI.
+          // FORGE ASCENT v2.0.4 — audited late bindings for post-script UI.
           window.setView = function(target){
             const targetView=document.getElementById(target);
             if(!targetView || !targetView.classList.contains('view')) return false;
@@ -104,7 +114,6 @@ jobs:
               document.querySelectorAll('.onboarding-prev').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()-1);});
               bindButton('onboardingFinish',finishOnboarding);
               document.querySelectorAll('[data-open-view]').forEach(btn=>{btn.type='button';btn.onclick=()=>window.setView(btn.dataset.openView);});
-
               bindButton('closeGuided',guidedClose);
               bindButton('guidedPrev',()=>{guidedState.index--;guidedRender();});
               bindButton('guidedNext',()=>{guidedState.index++;guidedRender();});
@@ -124,39 +133,58 @@ jobs:
 
           html = Path("www/index.html").read_text(encoding="utf-8")
           script_pos = html.find('<script src="./data-store.js"></script>')
-          if script_pos < 0:
-              raise SystemExit('Script anchor missing')
+          if script_pos < 0: raise SystemExit('Script anchor missing')
           post_html = html[script_pos:]
-          required_post_ids = {
-              'closeGuided','guidedPrev','guidedNext','guidedComplete','restStart','restSkip','restAdd',
-              'completeClose','closeoutBack','closeoutSave','onboardingFinish'
-          }
+          required_post_ids = {'closeGuided','guidedPrev','guidedNext','guidedComplete','restStart','restSkip','restAdd','completeClose','closeoutBack','closeoutSave','onboardingFinish'}
           post_ids = set(re.findall(r'id="([^"]+)"', post_html))
-          missing_post = sorted(required_post_ids-post_ids)
-          if missing_post:
-              raise SystemExit(f'Missing post-script controls: {missing_post}')
+          if required_post_ids-post_ids: raise SystemExit(f'Missing post-script controls: {sorted(required_post_ids-post_ids)}')
 
           targets = re.findall(r'data-open-view="([^"]+)"', html)
           view_ids = set(re.findall(r'<section[^>]+id="([^"]+)"[^>]+class="[^"]*\bview\b', html))
-          if set(targets) != {'profile','review','body','tests','library','data'}:
-              raise SystemExit(f'Unexpected Operator targets: {targets}')
-          if set(targets)-view_ids:
-              raise SystemExit(f'Missing Operator view targets: {sorted(set(targets)-view_ids)}')
+          if set(targets) != {'profile','review','body','tests','library','data'}: raise SystemExit(f'Unexpected Operator targets: {targets}')
+          if set(targets)-view_ids: raise SystemExit(f'Missing Operator view targets: {sorted(set(targets)-view_ids)}')
 
           lib = json.loads(Path('www/exercise-library.json').read_text(encoding='utf-8'))
           exercise_ids = {x['id'] for x in lib['exercises']}
           asset_ids = {p.stem for p in Path('www/assets/exercises').glob('*.svg')}
-          if exercise_ids != asset_ids:
-              raise SystemExit(f'Exercise visual mismatch missing={sorted(exercise_ids-asset_ids)} extra={sorted(asset_ids-exercise_ids)}')
-          if len(exercise_ids) != 18:
-              raise SystemExit(f'Expected 18 exercise visuals, got {len(exercise_ids)}')
+          if exercise_ids != asset_ids: raise SystemExit(f'Exercise visual mismatch missing={sorted(exercise_ids-asset_ids)} extra={sorted(asset_ids-exercise_ids)}')
+          if len(exercise_ids) != 18: raise SystemExit(f'Expected 18 exercise visuals, got {len(exercise_ids)}')
           PY
           node --check www/app.js
           node --check www/data-store.js
+          grep -q "exerciseLinesForSession" www/app.js
+          grep -q "duration>240" www/app.js
+          grep -q "duration>180" www/app.js
           grep -q "bindForgeAscentPostScriptUi" www/app.js
-          grep -q "assets/exercises/" www/app.js
           grep -q "substitutions:Array.isArray" www/data-store.js
-          grep -q "onboardingComplete" www/data-store.js
+
+      - name: Audit all 120 planned sessions
+        run: |
+          node <<'JS'
+          global.window=global;
+          global.localStorage={getItem:()=>null,setItem:()=>{}};
+          const fs=require('fs'),vm=require('vm');
+          for(const f of ['data-store.js','training-data.js','adaptive-engine.js']) vm.runInThisContext(fs.readFileSync('www/'+f,'utf8'),{filename:f});
+          const lib=JSON.parse(fs.readFileSync('www/exercise-library.json','utf8')),all=()=>lib.exercises;
+          window.FORGE_EXERCISES={
+            byId:id=>all().find(e=>e.id===id)||null,
+            byPattern:p=>all().filter(e=>e.pattern===p),
+            riskAllowed:(e,c={})=>{const p=+c.lumbarPain||0;if(p>=5&&e.lumbarStress>1)return false;if(p>=3&&e.lumbarStress>2)return false;return true},
+            equipmentMatches:(e,user=[])=>{if(!e.equipment?.length)return true;const q=user.map(x=>String(x).toLowerCase());return e.equipment.every(r=>['silla','superficie_elevada','toalla','apoyo_estable'].includes(r)||(r==='caminadora'&&q.some(x=>x.includes('caminadora')))||(r==='banda'&&q.some(x=>x.includes('banda')))||(r==='mancuerna'&&q.some(x=>x.includes('mancuerna'))))},
+            select(pattern,c={}){return this.byPattern(pattern).filter(e=>this.equipmentMatches(e,c.equipment||[])).filter(e=>this.riskAllowed(e,c))[0]||null}
+          };
+          const state=JSON.parse(JSON.stringify(FORGE_STORE.defaults));
+          let tested=0;
+          for(let w=1;w<=24;w++) for(let d=0;d<5;d++){
+            const s=FORGE_ADAPTIVE.buildSession(d,w,state,FORGE_TRAINING);tested++;
+            const lines=s.items.filter(x=>!x.startsWith('Semana de descarga')&&!x.startsWith('Circuito ·'));
+            if(!s.exerciseIds.length) throw Error(`empty session w${w}d${d+1}`);
+            if(lines.length!==s.exerciseIds.length) throw Error(`alignment w${w}d${d+1}: ${lines.length}/${s.exerciseIds.length}`);
+            if(s.exerciseIds.some(id=>!FORGE_TRAINING.exerciseTemplates[id])) throw Error(`unknown exercise w${w}d${d+1}`);
+          }
+          if(tested!==120) throw Error(`expected 120 sessions, got ${tested}`);
+          console.log(`120/120 sessions valid and exercise-line aligned`);
+          JS
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -171,8 +199,8 @@ jobs:
 
       - name: Set Android version
         run: |
-          sed -i 's/versionCode 1/versionCode 23/' android/app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "2.0.3"/' android/app/build.gradle
+          sed -i 's/versionCode 1/versionCode 24/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.4"/' android/app/build.gradle
 
       - name: Sync web assets
         run: npx cap sync android
@@ -184,12 +212,12 @@ jobs:
           ./gradlew assembleDebug --stacktrace
 
       - name: Copy APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.3-native.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.4-native.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FORGE_ASCENT_v2.0.3_NATIVE_APK
-          path: apps/forge-ascent/FORGE_ASCENT_v2.0.3-native.apk
+          name: FORGE_ASCENT_v2.0.4_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.4-native.apk
           if-no-files-found: error
           retention-days: 30

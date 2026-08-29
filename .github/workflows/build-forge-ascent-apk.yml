@@ -59,10 +59,12 @@ jobs:
           test -f www/index.html
           test -f www/app.js
 
-      - name: Apply onboarding runtime fix v2.0.1
+      - name: Apply core runtime fixes v2.0.2
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           ds = Path("www/data-store.js")
           s = ds.read_text(encoding="utf-8")
           s = s.replace('    schemaVersion: SCHEMA_VERSION,\n    profile: {','    schemaVersion: SCHEMA_VERSION,\n    ui: { onboardingComplete: false },\n    profile: {',1)
@@ -70,11 +72,23 @@ jobs:
           s = s.replace('      schemaVersion:SCHEMA_VERSION,\n      profile:{...d.profile,...(s.profile||{})},','      schemaVersion:SCHEMA_VERSION,\n      ui:{...d.ui,...(s.ui||{})},\n      profile:{...d.profile,...(s.profile||{})},',1)
           s = s.replace('    out.profile.age = Math.floor(number(out.profile.age,13,100,33));','    out.ui.onboardingComplete = Boolean(out.ui.onboardingComplete);\n    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',1)
           ds.write_text(s, encoding="utf-8")
+
           app = Path("www/app.js")
           a = app.read_text(encoding="utf-8")
           a += r'''
 
-          // FORGE ASCENT v2.0.1 — late onboarding binding fix.
+          // FORGE ASCENT v2.0.2 — internal view navigation + late onboarding binding.
+          window.setView = function(target){
+            const targetView=document.getElementById(target);
+            if(!targetView || !targetView.classList.contains('view')) return false;
+            document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v===targetView));
+            const directNav=document.querySelector(`nav button[data-view="${target}"]`);
+            document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',directNav ? b===directNav : b.dataset.view==='operator'));
+            try { refresh(); } catch(e) { console.error('FORGE ASCENT view refresh failed',e); }
+            window.scrollTo({top:0,left:0,behavior:'auto'});
+            return true;
+          };
+
           (function bindForgeAscentOnboardingAfterDom(){
             function bind(){
               const currentStep=()=>Number(document.querySelector('.onboarding-step:not(.hidden)')?.dataset.step||0);
@@ -82,15 +96,28 @@ jobs:
               document.querySelectorAll('.onboarding-prev').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()-1);});
               const finish=document.getElementById('onboardingFinish');
               if(finish){finish.type='button';finish.onclick=finishOnboarding;}
+              document.querySelectorAll('[data-open-view]').forEach(btn=>{btn.type='button';btn.onclick=()=>window.setView(btn.dataset.openView);});
             }
             if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind,{once:true});
             else bind();
           })();
           '''
           app.write_text(a, encoding="utf-8")
+
+          # Static navigation audit: every Operator destination must resolve to a real .view section.
+          html = Path("www/index.html").read_text(encoding="utf-8")
+          targets = re.findall(r'data-open-view="([^"]+)"', html)
+          view_ids = set(re.findall(r'<section[^>]+id="([^"]+)"[^>]+class="[^"]*\bview\b', html))
+          missing = sorted(set(targets) - view_ids)
+          if missing:
+              raise SystemExit(f"Missing Operator view targets: {missing}")
+          expected = {'profile','review','body','tests','library','data'}
+          if set(targets) != expected:
+              raise SystemExit(f"Unexpected Operator target set: {targets}")
           PY
           node --check www/app.js
           node --check www/data-store.js
+          grep -q "window.setView = function" www/app.js
           grep -q "bindForgeAscentOnboardingAfterDom" www/app.js
           grep -q "onboardingComplete" www/data-store.js
 
@@ -102,8 +129,8 @@ jobs:
 
       - name: Set Android version
         run: |
-          sed -i 's/versionCode 1/versionCode 21/' android/app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "2.0.1"/' android/app/build.gradle
+          sed -i 's/versionCode 1/versionCode 22/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.2"/' android/app/build.gradle
 
       - name: Sync web assets
         run: npx cap sync android
@@ -115,12 +142,12 @@ jobs:
           ./gradlew assembleDebug --stacktrace
 
       - name: Copy APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.1-native.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.2-native.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FORGE_ASCENT_v2.0.1_NATIVE_APK
-          path: apps/forge-ascent/FORGE_ASCENT_v2.0.1-native.apk
+          name: FORGE_ASCENT_v2.0.2_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.2-native.apk
           if-no-files-found: error
           retention-days: 30

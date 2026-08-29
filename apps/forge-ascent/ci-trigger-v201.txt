@@ -1,1 +1,1 @@
-FORGE ASCENT v2.0.1 clean CI build
+FORGE ASCENT v2.0.2 operator navigation audit build

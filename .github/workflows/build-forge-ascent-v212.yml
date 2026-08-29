@@ -32,6 +32,9 @@ jobs:
         run: |
           node --check www/app.js
           node --check www/data-store.js
+          grep -q 'function ensureAchievementsPanel()' www/app.js
+          grep -q 'week_24' www/app.js
+          grep -q 'missions_50' www/app.js
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Add Android platform
@@ -50,16 +53,15 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
-      - name: Verify Android assets
+      - name: Verify exact APK assets
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          a=Path('android/app/src/main/assets/public/app.js').read_text()
-          h=Path('android/app/src/main/assets/public/index.html').read_text()
-          assert 'computeAchievements' in a and 'week_24' in a and 'missions_50' in a
-          assert 'achievementsList' in h
-          print('Android achievement assets PASS')
-          PY
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -p "$APK" assets/public/app.js > /tmp/apk-app.js
+          grep -q 'function ensureAchievementsPanel()' /tmp/apk-app.js
+          grep -q 'week_24' /tmp/apk-app.js
+          grep -q 'missions_50' /tmp/apk-app.js
+          grep -q 'xpEarned=Math.max(0,newCredit-priorCredit)' /tmp/apk-app.js
+          echo 'Exact APK achievement assets PASS'
       - name: Copy APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.12-native.apk
       - uses: actions/upload-artifact@v4

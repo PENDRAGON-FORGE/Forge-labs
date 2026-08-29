@@ -1,0 +1,126 @@
+name: Build FORGE ASCENT v2.0.11 AUDIT
+
+on:
+  pull_request:
+    branches: ["forge-ascent-v206-ci-base"]
+    paths:
+      - "apps/forge-ascent/**"
+      - ".github/workflows/build-forge-ascent-v211.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/forge-ascent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/forge-ascent/package.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Restore verified web bundle
+        run: |
+          rm -rf www bundle-v2.b64 bundle-v2.zip
+          cat payload-v2/p01.b64 payload-v2/q02.b64 payload-v2/q03.b64 payload-v2/q04.b64 payload-v2/t05_1.b64 payload-v2/t05_2.b64 payload-v2/t05_3.b64 payload-v2/t05_4.b64 payload-v2/s06a.b64 payload-v2/s06b.b64 payload-v2/s07a.b64 payload-v2/s07b.b64 > bundle-v2.b64
+          base64 --decode bundle-v2.b64 > bundle-v2.zip
+          echo "b04029b6579866ac171f50a6765d30019d576f5a1c88ccaf89ad2eea49bf40ab  bundle-v2.zip" | sha256sum -c -
+          unzip -t bundle-v2.zip
+          mkdir -p www && unzip -q bundle-v2.zip -d www
+      - name: Apply v2.0.11 audit patch
+        run: python3 audit_v211.py
+      - name: Syntax audit
+        run: |
+          node --check www/app.js
+          node --check www/data-store.js
+          node --check www/exercise-library.js
+          node --check www/adaptive-engine.js
+          node --check www/training-data.js
+      - name: Lifecycle and anti-farming static audit
+        run: |
+          grep -q 'Cierra primero la semana ${view.activeWeek}' www/app.js
+          grep -q 'xpEarned=Math.max(0,newCredit-priorCredit)' www/app.js
+          grep -q 'xpEarned=Math.max(0,fullCredit-priorCredit)' www/app.js
+          grep -q 't.id=`cycle-${t.cycle}`' www/app.js
+          grep -q 't.cycle\*4>view.activeWeek' www/app.js
+          grep -q 'out.progression.completedWeeks = out.progression.completedWeeks.filter' www/data-store.js
+      - name: Backup lifecycle reconciliation audit
+        run: |
+          node <<'JS'
+          global.window=global;global.localStorage={getItem:()=>null,setItem:()=>{}};
+          const fs=require('fs'),vm=require('vm');vm.runInThisContext(fs.readFileSync('www/data-store.js','utf8'));
+          const n=FORGE_STORE.importPayload({progression:{activeWeek:1,selectedWeek:1,completedWeeks:[1,2,3]},sessionLogs:[
+            {date:'2026-08-01',week:1,day:1,duration:40,completion:1},{date:'2026-08-02',week:1,day:2,duration:40,completion:1},{date:'2026-08-03',week:1,day:3,duration:40,completion:1},{date:'2026-08-04',week:1,day:4,duration:40,completion:1},
+            {date:'2026-08-05',week:2,day:1,duration:40,completion:1},{date:'2026-08-06',week:2,day:2,duration:40,completion:1},{date:'2026-08-07',week:2,day:3,duration:40,completion:.5},{date:'2026-08-08',week:2,day:4,duration:40,completion:1}
+          ]});
+          if(JSON.stringify(n.progression.completedWeeks)!=='[1]') throw Error('completedWeeks not reconciled');
+          if(n.progression.activeWeek!==2) throw Error('activeWeek not advanced from completed history');
+          console.log('backup lifecycle reconciliation PASS');
+          JS
+      - name: Session credit math audit
+        run: |
+          node <<'JS'
+          const xp=120;
+          const earn=(prior,current)=>Math.max(0,Math.round(xp*Math.min(1,current))-Math.round(xp*Math.min(1,prior)));
+          if(earn(0,.5)!==60)throw Error('initial partial credit');
+          if(earn(.5,.5)!==0)throw Error('repeat farming still possible');
+          if(earn(.5,.8)!==36)throw Error('incremental improvement credit wrong');
+          if(earn(.8,1)!==24)throw Error('final completion credit wrong');
+          if(60+36+24!==xp)throw Error('slot credit exceeds cap');
+          console.log('session credit cap PASS');
+          JS
+      - name: Existing v2.0.10 regression gates
+        run: |
+          grep -q 'if(l>=29)return"ASCENDENTE"' www/app.js
+          grep -q 'metricText(r.weight)' www/app.js
+          grep -q 'completion>=.70' www/app.js
+          grep -q 'march_in_place' www/training-data.js
+          grep -q 'difficultyAllowed' www/exercise-library.js
+      - name: Audit all 120 sessions
+        run: |
+          node <<'JS'
+          global.window=global;global.localStorage={getItem:()=>null,setItem:()=>{}};
+          const fs=require('fs'),vm=require('vm');for(const f of ['data-store.js','training-data.js','adaptive-engine.js'])vm.runInThisContext(fs.readFileSync('www/'+f,'utf8'),{filename:f});
+          const lib=JSON.parse(fs.readFileSync('www/exercise-library.json','utf8'));
+          window.FORGE_EXERCISES={byId:id=>lib.exercises.find(e=>e.id===id)||null,byPattern:p=>lib.exercises.filter(e=>e.pattern===p),equipmentMatches:(e,user=[])=>{if(!e.equipment?.length)return true;const q=user.map(x=>String(x).toLowerCase());return e.equipment.every(r=>['silla','superficie_elevada','toalla','apoyo_estable'].includes(r)||(r==='caminadora'&&q.some(x=>x.includes('caminadora')))||(r==='banda'&&q.some(x=>x.includes('banda')))||(r==='mancuerna'&&q.some(x=>x.includes('mancuerna'))));},riskAllowed:(e,c={})=>{const p=+c.lumbarPain||0;if(p>=5&&e.lumbarStress>1)return false;if(p>=3&&e.lumbarStress>2)return false;return true},difficultyAllowed:(e,c={})=>{const l=+c.level||1,max=l<=1?3:l<=3?5:10;return e.difficulty<=max},select(pattern,c={}){return this.byPattern(pattern).filter(e=>this.equipmentMatches(e,c.equipment||[])).filter(e=>this.riskAllowed(e,c)).filter(e=>this.difficultyAllowed(e,c))[0]||null}};
+          const state=JSON.parse(JSON.stringify(FORGE_STORE.defaults));state.profile.equipment=[];let n=0;for(let w=1;w<=24;w++)for(let d=0;d<5;d++){const s=FORGE_ADAPTIVE.buildSession(d,w,state,FORGE_TRAINING);n++;if((s.substitutions||[]).some(x=>x.blocked))throw Error(`blocked w${w}d${d+1}`)}if(n!==120)throw Error('session count');console.log('120/120 sessions PASS');
+          JS
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Add Android platform
+        run: npx cap add android
+      - name: Harden Gradle wrapper timeout
+        run: |
+          sed -i '/^networkTimeout=/d' android/gradle/wrapper/gradle-wrapper.properties
+          echo 'networkTimeout=60000' >> android/gradle/wrapper/gradle-wrapper.properties
+      - name: Set Android version
+        run: |
+          sed -i 's/versionCode 1/versionCode 31/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.11"/' android/app/build.gradle
+      - name: Sync web assets
+        run: npx cap sync android
+      - name: Build native debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+      - name: Verify patched Android assets
+        run: |
+          grep -q 'xpEarned=Math.max(0,newCredit-priorCredit)' android/app/src/main/assets/public/app.js
+          grep -q 't.id=`cycle-${t.cycle}`' android/app/src/main/assets/public/app.js
+          grep -q 'out.progression.completedWeeks = out.progression.completedWeeks.filter' android/app/src/main/assets/public/data-store.js
+      - name: Copy APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.11-native.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FORGE_ASCENT_v2.0.11_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.11-native.apk
+          if-no-files-found: error
+          retention-days: 30

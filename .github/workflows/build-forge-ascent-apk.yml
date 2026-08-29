@@ -59,11 +59,11 @@ jobs:
           test -f www/index.html
           test -f www/app.js
 
-      - name: Apply core runtime fixes v2.0.2
+      - name: Apply audited runtime fixes v2.0.3
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
+          import json, re
 
           ds = Path("www/data-store.js")
           s = ds.read_text(encoding="utf-8")
@@ -71,13 +71,15 @@ jobs:
           s = s.replace('    } else {\n      Object.assign(d.profile, source.profile||{});','    } else {\n      Object.assign(d.ui, source.ui||{});\n      Object.assign(d.profile, source.profile||{});',1)
           s = s.replace('      schemaVersion:SCHEMA_VERSION,\n      profile:{...d.profile,...(s.profile||{})},','      schemaVersion:SCHEMA_VERSION,\n      ui:{...d.ui,...(s.ui||{})},\n      profile:{...d.profile,...(s.profile||{})},',1)
           s = s.replace('    out.profile.age = Math.floor(number(out.profile.age,13,100,33));','    out.ui.onboardingComplete = Boolean(out.ui.onboardingComplete);\n    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',1)
+          s = s.replace('      decision: String(s.decision || "maintain")\n    };','      decision: String(s.decision || "maintain"),\n      substitutions:Array.isArray(s.substitutions)?s.substitutions:[],\n      exerciseIds:Array.isArray(s.exerciseIds)?s.exerciseIds.map(String):[],\n      guided:Boolean(s.guided)\n    };',1)
           ds.write_text(s, encoding="utf-8")
 
           app = Path("www/app.js")
           a = app.read_text(encoding="utf-8")
+          a = a.replace('$("guidedImage").src=patternAsset(id);','$("guidedImage").src=`./assets/exercises/${id}.svg`;')
           a += r'''
 
-          // FORGE ASCENT v2.0.2 — internal view navigation + late onboarding binding.
+          // FORGE ASCENT v2.0.3 — audited late bindings for post-script UI.
           window.setView = function(target){
             const targetView=document.getElementById(target);
             if(!targetView || !targetView.classList.contains('view')) return false;
@@ -89,14 +91,30 @@ jobs:
             return true;
           };
 
-          (function bindForgeAscentOnboardingAfterDom(){
+          (function bindForgeAscentPostScriptUi(){
+            function bindButton(id,fn){
+              const el=document.getElementById(id);
+              if(!el) return;
+              el.type='button';
+              el.onclick=fn;
+            }
             function bind(){
               const currentStep=()=>Number(document.querySelector('.onboarding-step:not(.hidden)')?.dataset.step||0);
               document.querySelectorAll('.onboarding-next').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()+1);});
               document.querySelectorAll('.onboarding-prev').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()-1);});
-              const finish=document.getElementById('onboardingFinish');
-              if(finish){finish.type='button';finish.onclick=finishOnboarding;}
+              bindButton('onboardingFinish',finishOnboarding);
               document.querySelectorAll('[data-open-view]').forEach(btn=>{btn.type='button';btn.onclick=()=>window.setView(btn.dataset.openView);});
+
+              bindButton('closeGuided',guidedClose);
+              bindButton('guidedPrev',()=>{guidedState.index--;guidedRender();});
+              bindButton('guidedNext',()=>{guidedState.index++;guidedRender();});
+              bindButton('guidedComplete',completeCurrentExercise);
+              bindButton('restStart',startRest);
+              bindButton('restSkip',()=>{guidedState.restSeconds=0;updateRest();if(guidedState.restTimer){clearInterval(guidedState.restTimer);guidedState.restTimer=null;}});
+              bindButton('restAdd',()=>{guidedState.restSeconds+=15;updateRest();});
+              bindButton('completeClose',()=>{document.getElementById('missionComplete').classList.add('hidden');renderTraining();});
+              bindButton('closeoutBack',()=>{document.getElementById('missionCloseout').classList.add('hidden');document.getElementById('guidedSession').classList.remove('hidden');guidedRender();});
+              bindButton('closeoutSave',saveGuidedMission);
             }
             if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind,{once:true});
             else bind();
@@ -104,21 +122,40 @@ jobs:
           '''
           app.write_text(a, encoding="utf-8")
 
-          # Static navigation audit: every Operator destination must resolve to a real .view section.
           html = Path("www/index.html").read_text(encoding="utf-8")
+          script_pos = html.find('<script src="./data-store.js"></script>')
+          if script_pos < 0:
+              raise SystemExit('Script anchor missing')
+          post_html = html[script_pos:]
+          required_post_ids = {
+              'closeGuided','guidedPrev','guidedNext','guidedComplete','restStart','restSkip','restAdd',
+              'completeClose','closeoutBack','closeoutSave','onboardingFinish'
+          }
+          post_ids = set(re.findall(r'id="([^"]+)"', post_html))
+          missing_post = sorted(required_post_ids-post_ids)
+          if missing_post:
+              raise SystemExit(f'Missing post-script controls: {missing_post}')
+
           targets = re.findall(r'data-open-view="([^"]+)"', html)
           view_ids = set(re.findall(r'<section[^>]+id="([^"]+)"[^>]+class="[^"]*\bview\b', html))
-          missing = sorted(set(targets) - view_ids)
-          if missing:
-              raise SystemExit(f"Missing Operator view targets: {missing}")
-          expected = {'profile','review','body','tests','library','data'}
-          if set(targets) != expected:
-              raise SystemExit(f"Unexpected Operator target set: {targets}")
+          if set(targets) != {'profile','review','body','tests','library','data'}:
+              raise SystemExit(f'Unexpected Operator targets: {targets}')
+          if set(targets)-view_ids:
+              raise SystemExit(f'Missing Operator view targets: {sorted(set(targets)-view_ids)}')
+
+          lib = json.loads(Path('www/exercise-library.json').read_text(encoding='utf-8'))
+          exercise_ids = {x['id'] for x in lib['exercises']}
+          asset_ids = {p.stem for p in Path('www/assets/exercises').glob('*.svg')}
+          if exercise_ids != asset_ids:
+              raise SystemExit(f'Exercise visual mismatch missing={sorted(exercise_ids-asset_ids)} extra={sorted(asset_ids-exercise_ids)}')
+          if len(exercise_ids) != 18:
+              raise SystemExit(f'Expected 18 exercise visuals, got {len(exercise_ids)}')
           PY
           node --check www/app.js
           node --check www/data-store.js
-          grep -q "window.setView = function" www/app.js
-          grep -q "bindForgeAscentOnboardingAfterDom" www/app.js
+          grep -q "bindForgeAscentPostScriptUi" www/app.js
+          grep -q "assets/exercises/" www/app.js
+          grep -q "substitutions:Array.isArray" www/data-store.js
           grep -q "onboardingComplete" www/data-store.js
 
       - name: Install dependencies
@@ -127,10 +164,15 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Harden Gradle wrapper network timeout
+        run: |
+          sed -i '/^networkTimeout=/d' android/gradle/wrapper/gradle-wrapper.properties
+          echo 'networkTimeout=60000' >> android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Set Android version
         run: |
-          sed -i 's/versionCode 1/versionCode 22/' android/app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "2.0.2"/' android/app/build.gradle
+          sed -i 's/versionCode 1/versionCode 23/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.3"/' android/app/build.gradle
 
       - name: Sync web assets
         run: npx cap sync android
@@ -142,12 +184,12 @@ jobs:
           ./gradlew assembleDebug --stacktrace
 
       - name: Copy APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.2-native.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.3-native.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FORGE_ASCENT_v2.0.2_NATIVE_APK
-          path: apps/forge-ascent/FORGE_ASCENT_v2.0.2-native.apk
+          name: FORGE_ASCENT_v2.0.3_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.3-native.apk
           if-no-files-found: error
           retention-days: 30

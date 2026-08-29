@@ -61,12 +61,12 @@ jobs:
           node <<'JS'
           global.window=global;global.localStorage={getItem:()=>null,setItem:()=>{}};
           const fs=require('fs'),vm=require('vm');
-          for(const f of ['data-store.js','training-data.js','exercise-library.js','adaptive-engine.js'])vm.runInThisContext(fs.readFileSync('www/'+f,'utf8'),{filename:f});
+          for(const f of ['data-store.js','training-data.js','adaptive-engine.js'])vm.runInThisContext(fs.readFileSync('www/'+f,'utf8'),{filename:f});
           const lib=JSON.parse(fs.readFileSync('www/exercise-library.json','utf8'));
           window.FORGE_EXERCISES={
             byId:id=>lib.exercises.find(e=>e.id===id)||null,
             byPattern:p=>lib.exercises.filter(e=>e.pattern===p),
-            equipmentMatches:(e,user=[])=>{if(!e.equipment?.length)return true;const q=user.map(x=>String(x).toLowerCase());return e.equipment.every(r=>['silla','superficie_elevada','toalla','apoyo_estable'].includes(r)||(r==='caminadora'&&q.some(x=>x.includes('caminadora')))||(r==='banda'&&q.some(x=>x.includes('banda')))||(r==='mancuerna'&&q.some(x=>x.includes('mancuerna')))},
+            equipmentMatches:(e,user=[])=>{if(!e.equipment?.length)return true;const q=user.map(x=>String(x).toLowerCase());return e.equipment.every(r=>['silla','superficie_elevada','toalla','apoyo_estable'].includes(r)||(r==='caminadora'&&q.some(x=>x.includes('caminadora')))||(r==='banda'&&q.some(x=>x.includes('banda')))||(r==='mancuerna'&&q.some(x=>x.includes('mancuerna'))));},
             riskAllowed:(e,c={})=>{const p=+c.lumbarPain||0;if(p>=5&&e.lumbarStress>1)return false;if(p>=3&&e.lumbarStress>2)return false;return true},
             difficultyAllowed:(e,c={})=>{const l=+c.level||1,max=l<=1?3:l<=3?5:10;return e.difficulty<=max},
             select(pattern,c={}){return this.byPattern(pattern).filter(e=>this.equipmentMatches(e,c.equipment||[])).filter(e=>this.riskAllowed(e,c)).filter(e=>this.difficultyAllowed(e,c))[0]||null}

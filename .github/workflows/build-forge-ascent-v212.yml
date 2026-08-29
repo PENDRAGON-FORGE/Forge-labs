@@ -1,0 +1,68 @@
+name: Build FORGE ASCENT v2.0.12 AUDIT
+on:
+  pull_request:
+    branches: ["forge-ascent-v206-ci-base"]
+    paths: ["apps/forge-ascent/**", ".github/workflows/build-forge-ascent-v212.yml"]
+  workflow_dispatch:
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/forge-ascent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Restore verified web bundle
+        run: |
+          rm -rf www bundle-v2.b64 bundle-v2.zip
+          cat payload-v2/*.b64 > bundle-v2.b64
+          base64 --decode bundle-v2.b64 > bundle-v2.zip
+          mkdir -p www && unzip -q bundle-v2.zip -d www
+      - name: Apply v2.0.12 audit patch
+        run: python3 audit_v212.py
+      - name: Syntax and achievement gates
+        run: |
+          node --check www/app.js
+          node --check www/data-store.js
+          grep -q 'function computeAchievements()' www/app.js
+          grep -q 'id="achievementsList"' www/index.html
+          grep -q 'week_24' www/app.js
+          grep -q 'missions_50' www/app.js
+          grep -q 'xpEarned=Math.max(0,newCredit-priorCredit)' www/app.js
+          grep -q 't.id=`cycle-${t.cycle}`' www/app.js
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Add Android platform
+        run: npx cap add android
+      - name: Harden Gradle timeout
+        run: |
+          sed -i '/^networkTimeout=/d' android/gradle/wrapper/gradle-wrapper.properties
+          echo 'networkTimeout=60000' >> android/gradle/wrapper/gradle-wrapper.properties
+      - name: Set Android version
+        run: |
+          sed -i 's/versionCode 1/versionCode 32/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.12"/' android/app/build.gradle
+      - name: Sync and build
+        run: |
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+      - name: Verify Android assets
+        run: |
+          grep -q 'function computeAchievements()' android/app/src/main/assets/public/app.js
+          grep -q 'id="achievementsList"' android/app/src/main/assets/public/index.html
+      - name: Copy APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.12-native.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FORGE_ASCENT_v2.0.12_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.12-native.apk
+          retention-days: 30

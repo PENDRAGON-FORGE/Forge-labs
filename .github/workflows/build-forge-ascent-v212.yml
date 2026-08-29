@@ -32,12 +32,15 @@ jobs:
         run: |
           node --check www/app.js
           node --check www/data-store.js
-          grep -q 'function computeAchievements()' www/app.js
-          grep -q 'id="achievementsList"' www/index.html
-          grep -q 'week_24' www/app.js
-          grep -q 'missions_50' www/app.js
-          grep -q 'xpEarned=Math.max(0,newCredit-priorCredit)' www/app.js
-          grep -q 't.id=`cycle-${t.cycle}`' www/app.js
+          python3 - <<'PY'
+          from pathlib import Path
+          a=Path('www/app.js').read_text()
+          h=Path('www/index.html').read_text()
+          for token in ['function computeAchievements()','week_24','missions_50','xpEarned=Math.max(0,newCredit-priorCredit)','t.id=`cycle-${t.cycle}`']:
+              assert token in a, token
+          assert 'id="achievementsList"' in h
+          print('achievement/static gates PASS')
+          PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Add Android platform

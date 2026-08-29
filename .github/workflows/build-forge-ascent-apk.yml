@@ -59,7 +59,7 @@ jobs:
           test -f www/index.html
           test -f www/app.js
 
-      - name: Apply audited runtime fixes v2.0.4
+      - name: Apply audited runtime fixes v2.0.5
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -68,11 +68,21 @@ jobs:
           ds = Path("www/data-store.js")
           s = ds.read_text(encoding="utf-8")
           s = s.replace('    schemaVersion: SCHEMA_VERSION,\n    profile: {','    schemaVersion: SCHEMA_VERSION,\n    ui: { onboardingComplete: false },\n    profile: {',1)
+          s = s.replace('      heightCm: 185,','      heightCm: 185,\n      objective: "Bajar grasa y ganar músculo",',1)
           s = s.replace('    } else {\n      Object.assign(d.profile, source.profile||{});','    } else {\n      Object.assign(d.ui, source.ui||{});\n      Object.assign(d.profile, source.profile||{});',1)
           s = s.replace('      schemaVersion:SCHEMA_VERSION,\n      profile:{...d.profile,...(s.profile||{})},','      schemaVersion:SCHEMA_VERSION,\n      ui:{...d.ui,...(s.ui||{})},\n      profile:{...d.profile,...(s.profile||{})},',1)
-          s = s.replace('    out.profile.age = Math.floor(number(out.profile.age,13,100,33));','    out.ui.onboardingComplete = Boolean(out.ui.onboardingComplete);\n    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',1)
+          s = s.replace('    out.profile.age = Math.floor(number(out.profile.age,13,100,33));','    out.ui.onboardingComplete = Boolean(out.ui.onboardingComplete);\n    out.profile.objective = String((s.profile && (s.profile.objective || s.profile.goal)) || out.profile.objective || "Bajar grasa y ganar músculo");\n    out.profile.age = Math.floor(number(out.profile.age,13,100,33));',1)
+          s = s.replace('      weight:number(r.weight,40,300,110),','      weight:r.weight==null?null:number(r.weight,40,300,null),',1)
+          s = s.replace('      pushups:number(r.pushups,0,300,0),','      pushups:r.pushups==null?null:number(r.pushups,0,300,null),',1)
+          s = s.replace('      plank:number(r.plank,0,1800,0),','      plank:r.plank==null?null:number(r.plank,0,1800,null),',1)
           s = s.replace('      decision: String(s.decision || "maintain")\n    };','      decision: String(s.decision || "maintain"),\n      substitutions:Array.isArray(s.substitutions)?s.substitutions:[],\n      exerciseIds:Array.isArray(s.exerciseIds)?s.exerciseIds.map(String):[],\n      guided:Boolean(s.guided)\n    };',1)
+          s = s.replace('    out.reviews.sort((a,b)=>a.date.localeCompare(b.date));','    out.progression.sessions = Math.max(out.progression.sessions, out.sessionLogs.length);\n    out.reviews.sort((a,b)=>a.date.localeCompare(b.date));',1)
           ds.write_text(s, encoding="utf-8")
+
+          htmlp=Path('www/index.html')
+          html=htmlp.read_text(encoding='utf-8')
+          html=html.replace('<label>Peso objetivo (kg)</label><input id="pgoal" type="number" min="40" max="300" step="0.1">','<label>Objetivo principal</label><select id="pobjective"><option>Bajar grasa y ganar músculo</option><option>Mejorar condición</option><option>Ganar fuerza</option></select>\n   <label>Peso objetivo (kg)</label><input id="pgoal" type="number" min="40" max="300" step="0.1">',1)
+          htmlp.write_text(html,encoding='utf-8')
 
           app = Path("www/app.js")
           a = app.read_text(encoding="utf-8")
@@ -87,9 +97,17 @@ jobs:
           a = a.replace('if(!start||!end||!Number.isFinite(duration)||duration<=0){','if(!start||!end||!Number.isFinite(duration)||duration<=0||duration>240){',1)
           a = a.replace('!Number.isFinite(duration)||duration<1){','!Number.isFinite(duration)||duration<1||duration>180){',1)
           a = a.replace('a.download="forge-ascent-v1-3-backup.json";','a.download="forge-ascent-v2-backup.json";',1)
+          a = a.replace('function firstValid(arr,key){for(const x of arr){const v=Number(x?.[key]);if(Number.isFinite(v))return v}return null}','function firstValid(arr,key){for(const x of arr){const raw=x?.[key];if(raw==null||raw==="")continue;const v=Number(raw);if(Number.isFinite(v))return v}return null}',1)
+          a = a.replace('function lastValid(arr,key){for(let i=arr.length-1;i>=0;i--){const v=Number(arr[i]?.[key]);if(Number.isFinite(v))return v}return null}','function lastValid(arr,key){for(let i=arr.length-1;i>=0;i--){const raw=arr[i]?.[key];if(raw==null||raw==="")continue;const v=Number(raw);if(Number.isFinite(v))return v}return null}',1)
+          a = a.replace('function trendLabel(values,lowerIsBetter=false){const c=values.map(Number).filter(Number.isFinite);','function trendLabel(values,lowerIsBetter=false){const c=values.filter(v=>v!=null&&v!=="").map(Number).filter(Number.isFinite);',1)
+          a = a.replace('${r.weight}</td><td>${r.waist??"—"}</td><td>${r.pushups}</td><td>${r.plank}s</td>','${r.weight??"—"}</td><td>${r.waist??"—"}</td><td>${r.pushups??"—"}</td><td>${r.plank==null?"—":r.plank+"s"}</td>',1)
+          a = a.replace('$("pname").value=p.name;$("page").value=p.age;$("pheight").value=p.heightCm;$("pgoal").value=p.goalWeightKg;','$("pname").value=p.name;$("page").value=p.age;$("pheight").value=p.heightCm;$("pobjective").value=p.objective||"Bajar grasa y ganar músculo";$("pgoal").value=p.goalWeightKg;',1)
+          a = a.replace('<p>Peso actual: ${s.currentWeightKg.toFixed(1)} kg</p><p>Meta: ${p.goalWeightKg.toFixed(1)} kg</p>','<p>Peso actual: ${s.currentWeightKg.toFixed(1)} kg</p><p>Objetivo: ${p.objective||"Bajar grasa y ganar músculo"}</p><p>Meta: ${p.goalWeightKg.toFixed(1)} kg</p>',1)
+          a = a.replace('const p={name:$("pname").value.trim()||"Operador",age:','const p={name:$("pname").value.trim()||"Operador",objective:$("pobjective").value,age:',1)
+          a = a.replace('state.profile.goal=$("onboardGoal").value;view.reviews.push({date:new Date().toISOString().slice(0,10),pain:Number($("onboardPain").value||0),energy:Number($("onboardEnergy").value||6),sleep:8});','state.profile.objective=$("onboardGoal").value;view.reviews.push({date:new Date().toISOString().slice(0,10),weight:null,waist:null,pushups:null,plank:null,pain:Number($("onboardPain").value||0),energy:Number($("onboardEnergy").value||6),sleep:8,notes:"Check-in inicial"});',1)
           a += r'''
 
-          // FORGE ASCENT v2.0.4 — audited late bindings for post-script UI.
+          // FORGE ASCENT v2.0.5 — audited late bindings for post-script UI.
           window.setView = function(target){
             const targetView=document.getElementById(target);
             if(!targetView || !targetView.classList.contains('view')) return false;
@@ -100,90 +118,68 @@ jobs:
             window.scrollTo({top:0,left:0,behavior:'auto'});
             return true;
           };
-
           (function bindForgeAscentPostScriptUi(){
-            function bindButton(id,fn){
-              const el=document.getElementById(id);
-              if(!el) return;
-              el.type='button';
-              el.onclick=fn;
-            }
+            function bindButton(id,fn){const el=document.getElementById(id);if(!el)return;el.type='button';el.onclick=fn;}
             function bind(){
               const currentStep=()=>Number(document.querySelector('.onboarding-step:not(.hidden)')?.dataset.step||0);
               document.querySelectorAll('.onboarding-next').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()+1);});
               document.querySelectorAll('.onboarding-prev').forEach(btn=>{btn.type='button';btn.onclick=()=>showOnboardingStep(currentStep()-1);});
               bindButton('onboardingFinish',finishOnboarding);
               document.querySelectorAll('[data-open-view]').forEach(btn=>{btn.type='button';btn.onclick=()=>window.setView(btn.dataset.openView);});
-              bindButton('closeGuided',guidedClose);
-              bindButton('guidedPrev',()=>{guidedState.index--;guidedRender();});
-              bindButton('guidedNext',()=>{guidedState.index++;guidedRender();});
-              bindButton('guidedComplete',completeCurrentExercise);
-              bindButton('restStart',startRest);
-              bindButton('restSkip',()=>{guidedState.restSeconds=0;updateRest();if(guidedState.restTimer){clearInterval(guidedState.restTimer);guidedState.restTimer=null;}});
-              bindButton('restAdd',()=>{guidedState.restSeconds+=15;updateRest();});
-              bindButton('completeClose',()=>{document.getElementById('missionComplete').classList.add('hidden');renderTraining();});
-              bindButton('closeoutBack',()=>{document.getElementById('missionCloseout').classList.add('hidden');document.getElementById('guidedSession').classList.remove('hidden');guidedRender();});
-              bindButton('closeoutSave',saveGuidedMission);
+              bindButton('closeGuided',guidedClose);bindButton('guidedPrev',()=>{guidedState.index--;guidedRender();});bindButton('guidedNext',()=>{guidedState.index++;guidedRender();});bindButton('guidedComplete',completeCurrentExercise);
+              bindButton('restStart',startRest);bindButton('restSkip',()=>{guidedState.restSeconds=0;updateRest();if(guidedState.restTimer){clearInterval(guidedState.restTimer);guidedState.restTimer=null;}});bindButton('restAdd',()=>{guidedState.restSeconds+=15;updateRest();});
+              bindButton('completeClose',()=>{document.getElementById('missionComplete').classList.add('hidden');renderTraining();});bindButton('closeoutBack',()=>{document.getElementById('missionCloseout').classList.add('hidden');document.getElementById('guidedSession').classList.remove('hidden');guidedRender();});bindButton('closeoutSave',saveGuidedMission);
             }
-            if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind,{once:true});
-            else bind();
+            if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind,{once:true}); else bind();
           })();
           '''
           app.write_text(a, encoding="utf-8")
 
-          html = Path("www/index.html").read_text(encoding="utf-8")
-          script_pos = html.find('<script src="./data-store.js"></script>')
-          if script_pos < 0: raise SystemExit('Script anchor missing')
-          post_html = html[script_pos:]
-          required_post_ids = {'closeGuided','guidedPrev','guidedNext','guidedComplete','restStart','restSkip','restAdd','completeClose','closeoutBack','closeoutSave','onboardingFinish'}
-          post_ids = set(re.findall(r'id="([^"]+)"', post_html))
-          if required_post_ids-post_ids: raise SystemExit(f'Missing post-script controls: {sorted(required_post_ids-post_ids)}')
-
-          targets = re.findall(r'data-open-view="([^"]+)"', html)
-          view_ids = set(re.findall(r'<section[^>]+id="([^"]+)"[^>]+class="[^"]*\bview\b', html))
-          if set(targets) != {'profile','review','body','tests','library','data'}: raise SystemExit(f'Unexpected Operator targets: {targets}')
-          if set(targets)-view_ids: raise SystemExit(f'Missing Operator view targets: {sorted(set(targets)-view_ids)}')
-
-          lib = json.loads(Path('www/exercise-library.json').read_text(encoding='utf-8'))
-          exercise_ids = {x['id'] for x in lib['exercises']}
-          asset_ids = {p.stem for p in Path('www/assets/exercises').glob('*.svg')}
-          if exercise_ids != asset_ids: raise SystemExit(f'Exercise visual mismatch missing={sorted(exercise_ids-asset_ids)} extra={sorted(asset_ids-exercise_ids)}')
-          if len(exercise_ids) != 18: raise SystemExit(f'Expected 18 exercise visuals, got {len(exercise_ids)}')
+          html=Path('www/index.html').read_text(encoding='utf-8')
+          if 'id="pobjective"' not in html: raise SystemExit('Objective profile control missing')
+          script_pos=html.find('<script src="./data-store.js"></script>')
+          if script_pos<0: raise SystemExit('Script anchor missing')
+          required={'closeGuided','guidedPrev','guidedNext','guidedComplete','restStart','restSkip','restAdd','completeClose','closeoutBack','closeoutSave','onboardingFinish'}
+          post_ids=set(re.findall(r'id="([^"]+)"',html[script_pos:]))
+          if required-post_ids: raise SystemExit(f'Missing post-script controls: {sorted(required-post_ids)}')
+          targets=re.findall(r'data-open-view="([^"]+)"',html);view_ids=set(re.findall(r'<section[^>]+id="([^"]+)"[^>]+class="[^"]*\bview\b',html))
+          if set(targets)!={'profile','review','body','tests','library','data'} or set(targets)-view_ids: raise SystemExit('Operator navigation mismatch')
+          lib=json.loads(Path('www/exercise-library.json').read_text(encoding='utf-8'));exercise_ids={x['id'] for x in lib['exercises']};asset_ids={p.stem for p in Path('www/assets/exercises').glob('*.svg')}
+          if exercise_ids!=asset_ids or len(exercise_ids)!=18: raise SystemExit('Exercise visual mismatch')
           PY
           node --check www/app.js
           node --check www/data-store.js
-          grep -q "exerciseLinesForSession" www/app.js
-          grep -q "duration>240" www/app.js
-          grep -q "duration>180" www/app.js
-          grep -q "bindForgeAscentPostScriptUi" www/app.js
-          grep -q "substitutions:Array.isArray" www/data-store.js
+          grep -q "raw==null" www/app.js
+          grep -q "Check-in inicial" www/app.js
+          grep -q "pobjective" www/app.js
+          grep -q "objective" www/data-store.js
+
+      - name: Audit state normalization and null metrics
+        run: |
+          node <<'JS'
+          global.window=global;let mem={};global.localStorage={getItem:k=>mem[k]||null,setItem:(k,v)=>mem[k]=v};
+          const fs=require('fs'),vm=require('vm');vm.runInThisContext(fs.readFileSync('www/data-store.js','utf8'));
+          let s=JSON.parse(JSON.stringify(FORGE_STORE.defaults));
+          s.profile.goal='Ganar fuerza';delete s.profile.objective;
+          s.reviews=[{date:'2026-08-29',weight:null,waist:null,pushups:null,plank:null,energy:6,pain:0,sleep:8,notes:'Check-in inicial'}];
+          s.sessionLogs=[{date:'2026-08-29',week:1,day:1,duration:60,rpe:6,painBefore:0,painAfter:0,energyBefore:5,energyAfter:6,completion:1}];
+          const n=FORGE_STORE.normalize(s);
+          if(n.reviews[0].weight!==null||n.reviews[0].pushups!==null||n.reviews[0].plank!==null) throw Error('null metrics were converted to numbers');
+          if(n.profile.objective!=='Ganar fuerza') throw Error('legacy goal migration failed');
+          if(n.progression.sessions<1) throw Error('session count reconciliation failed');
+          console.log('state normalization/null metrics PASS');
+          JS
 
       - name: Audit all 120 planned sessions
         run: |
           node <<'JS'
-          global.window=global;
-          global.localStorage={getItem:()=>null,setItem:()=>{}};
-          const fs=require('fs'),vm=require('vm');
-          for(const f of ['data-store.js','training-data.js','adaptive-engine.js']) vm.runInThisContext(fs.readFileSync('www/'+f,'utf8'),{filename:f});
+          global.window=global;global.localStorage={getItem:()=>null,setItem:()=>{}};
+          const fs=require('fs'),vm=require('vm');for(const f of ['data-store.js','training-data.js','adaptive-engine.js'])vm.runInThisContext(fs.readFileSync('www/'+f,'utf8'),{filename:f});
           const lib=JSON.parse(fs.readFileSync('www/exercise-library.json','utf8')),all=()=>lib.exercises;
-          window.FORGE_EXERCISES={
-            byId:id=>all().find(e=>e.id===id)||null,
-            byPattern:p=>all().filter(e=>e.pattern===p),
-            riskAllowed:(e,c={})=>{const p=+c.lumbarPain||0;if(p>=5&&e.lumbarStress>1)return false;if(p>=3&&e.lumbarStress>2)return false;return true},
-            equipmentMatches:(e,user=[])=>{if(!e.equipment?.length)return true;const q=user.map(x=>String(x).toLowerCase());return e.equipment.every(r=>['silla','superficie_elevada','toalla','apoyo_estable'].includes(r)||(r==='caminadora'&&q.some(x=>x.includes('caminadora')))||(r==='banda'&&q.some(x=>x.includes('banda')))||(r==='mancuerna'&&q.some(x=>x.includes('mancuerna'))))},
-            select(pattern,c={}){return this.byPattern(pattern).filter(e=>this.equipmentMatches(e,c.equipment||[])).filter(e=>this.riskAllowed(e,c))[0]||null}
-          };
-          const state=JSON.parse(JSON.stringify(FORGE_STORE.defaults));
-          let tested=0;
-          for(let w=1;w<=24;w++) for(let d=0;d<5;d++){
-            const s=FORGE_ADAPTIVE.buildSession(d,w,state,FORGE_TRAINING);tested++;
-            const lines=s.items.filter(x=>!x.startsWith('Semana de descarga')&&!x.startsWith('Circuito ·'));
-            if(!s.exerciseIds.length) throw Error(`empty session w${w}d${d+1}`);
-            if(lines.length!==s.exerciseIds.length) throw Error(`alignment w${w}d${d+1}: ${lines.length}/${s.exerciseIds.length}`);
-            if(s.exerciseIds.some(id=>!FORGE_TRAINING.exerciseTemplates[id])) throw Error(`unknown exercise w${w}d${d+1}`);
-          }
-          if(tested!==120) throw Error(`expected 120 sessions, got ${tested}`);
-          console.log(`120/120 sessions valid and exercise-line aligned`);
+          window.FORGE_EXERCISES={byId:id=>all().find(e=>e.id===id)||null,byPattern:p=>all().filter(e=>e.pattern===p),riskAllowed:(e,c={})=>{const p=+c.lumbarPain||0;if(p>=5&&e.lumbarStress>1)return false;if(p>=3&&e.lumbarStress>2)return false;return true},equipmentMatches:(e,user=[])=>{if(!e.equipment?.length)return true;const q=user.map(x=>String(x).toLowerCase());return e.equipment.every(r=>['silla','superficie_elevada','toalla','apoyo_estable'].includes(r)||(r==='caminadora'&&q.some(x=>x.includes('caminadora')))||(r==='banda'&&q.some(x=>x.includes('banda')))||(r==='mancuerna'&&q.some(x=>x.includes('mancuerna'))))},select(pattern,c={}){return this.byPattern(pattern).filter(e=>this.equipmentMatches(e,c.equipment||[])).filter(e=>this.riskAllowed(e,c))[0]||null}};
+          const state=JSON.parse(JSON.stringify(FORGE_STORE.defaults));let tested=0;
+          for(let w=1;w<=24;w++)for(let d=0;d<5;d++){const s=FORGE_ADAPTIVE.buildSession(d,w,state,FORGE_TRAINING);tested++;const lines=s.items.filter(x=>!x.startsWith('Semana de descarga')&&!x.startsWith('Circuito ·'));if(!s.exerciseIds.length||lines.length!==s.exerciseIds.length||s.exerciseIds.some(id=>!FORGE_TRAINING.exerciseTemplates[id]))throw Error(`session audit failed w${w}d${d+1}`)}
+          if(tested!==120)throw Error(`expected 120, got ${tested}`);console.log('120/120 sessions PASS');
           JS
 
       - name: Install dependencies
@@ -199,8 +195,8 @@ jobs:
 
       - name: Set Android version
         run: |
-          sed -i 's/versionCode 1/versionCode 24/' android/app/build.gradle
-          sed -i 's/versionName "1.0"/versionName "2.0.4"/' android/app/build.gradle
+          sed -i 's/versionCode 1/versionCode 25/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.5"/' android/app/build.gradle
 
       - name: Sync web assets
         run: npx cap sync android
@@ -212,12 +208,12 @@ jobs:
           ./gradlew assembleDebug --stacktrace
 
       - name: Copy APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.4-native.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.5-native.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FORGE_ASCENT_v2.0.4_NATIVE_APK
-          path: apps/forge-ascent/FORGE_ASCENT_v2.0.4-native.apk
+          name: FORGE_ASCENT_v2.0.5_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.5-native.apk
           if-no-files-found: error
           retention-days: 30

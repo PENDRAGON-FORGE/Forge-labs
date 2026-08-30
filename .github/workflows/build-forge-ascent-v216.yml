@@ -1,0 +1,151 @@
+name: Build FORGE ASCENT v2.0.16 LIFECYCLE BACKUP SAFETY
+on:
+  pull_request:
+    branches: ["forge-ascent-v206-ci-base"]
+    paths: ["apps/forge-ascent/**", ".github/workflows/build-forge-ascent-v216.yml"]
+  workflow_dispatch:
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/forge-ascent
+    env:
+      FA_KEYSTORE_B64: ${{ secrets.FA_KEYSTORE_B64 }}
+      FA_KEYSTORE_PASSWORD: ${{ secrets.FA_KEYSTORE_PASSWORD }}
+      FA_KEY_ALIAS: ${{ secrets.FA_KEY_ALIAS }}
+      FA_KEY_PASSWORD: ${{ secrets.FA_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Restore verified web bundle
+        run: |
+          rm -rf www bundle-v2.b64 bundle-v2.zip
+          cat payload-v2/p01.b64 payload-v2/q02.b64 payload-v2/q03.b64 payload-v2/q04.b64 payload-v2/t05_1.b64 payload-v2/t05_2.b64 payload-v2/t05_3.b64 payload-v2/t05_4.b64 payload-v2/s06a.b64 payload-v2/s06b.b64 payload-v2/s07a.b64 payload-v2/s07b.b64 > bundle-v2.b64
+          base64 --decode bundle-v2.b64 > bundle-v2.zip
+          echo "b04029b6579866ac171f50a6765d30019d576f5a1c88ccaf89ad2eea49bf40ab  bundle-v2.zip" | sha256sum -c -
+          mkdir -p www && unzip -q bundle-v2.zip -d www
+      - name: Apply v2.0.16 audit patch
+        run: python3 audit_v216.py
+      - name: Syntax and lifecycle gates
+        run: |
+          node --check www/app.js
+          node --check www/data-store.js
+          grep -q 'BACKUP_MAX_BYTES=5\*1024\*1024' www/app.js
+          grep -q 'FORGE_FLUSH_STATE' www/app.js
+          grep -q 'visibilitychange' www/app.js
+          grep -q 'pagehide' www/app.js
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Add Android platform
+        run: npx cap add android
+      - name: Install native bridge, lifecycle flush and bounded import
+        run: |
+          MAIN=android/app/src/main/java/com/pendragonforge/forgeascent/v2/MainActivity.java
+          mkdir -p "$(dirname "$MAIN")"
+          cat > "$MAIN" <<'JAVA'
+          package com.pendragonforge.forgeascent.v2;
+
+          import android.os.Bundle;
+          import android.webkit.JavascriptInterface;
+          import androidx.activity.OnBackPressedCallback;
+          import androidx.activity.result.ActivityResultLauncher;
+          import androidx.activity.result.contract.ActivityResultContracts;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.nio.charset.StandardCharsets;
+          import org.json.JSONObject;
+
+          public class MainActivity extends BridgeActivity {
+            private static final int MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+            private ActivityResultLauncher<String> createDocumentLauncher;
+            private ActivityResultLauncher<String[]> openDocumentLauncher;
+            private String pendingExport = "";
+
+            @Override protected void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              createDocumentLauncher = registerForActivityResult(new ActivityResultContracts.CreateDocument("application/json"), uri -> {
+                if (uri == null) { status("Exportación cancelada."); return; }
+                try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                  if (out == null) throw new IllegalStateException("No output stream");
+                  out.write(pendingExport.getBytes(StandardCharsets.UTF_8)); out.flush(); status("Respaldo exportado correctamente.");
+                } catch (Exception ex) { status("No se pudo guardar el respaldo."); }
+                finally { pendingExport = ""; }
+              });
+              openDocumentLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+                if (uri == null) { status("Importación cancelada."); return; }
+                try (InputStream in = getContentResolver().openInputStream(uri)) {
+                  if (in == null) throw new IllegalStateException("No input stream");
+                  ByteArrayOutputStream bytes = new ByteArrayOutputStream(); byte[] buffer = new byte[8192]; int n,total=0;
+                  while ((n = in.read(buffer)) != -1) { total += n; if (total > MAX_BACKUP_BYTES) { status("Respaldo demasiado grande: máximo 5 MB."); return; } bytes.write(buffer,0,n); }
+                  String text = bytes.toString(StandardCharsets.UTF_8.name());
+                  getBridge().eval("window.FORGE_NATIVE_IMPORT(" + JSONObject.quote(text) + ")", null);
+                } catch (Exception ex) { status("No se pudo leer el respaldo seleccionado."); }
+              });
+              if (getBridge()!=null && getBridge().getWebView()!=null) getBridge().getWebView().addJavascriptInterface(new ForgeAscentAndroidBridge(),"ForgeAscentAndroid");
+              getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){@Override public void handleOnBackPressed(){
+                if(getBridge()==null){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();return;}
+                getBridge().eval("(window.FORGE_ANDROID_BACK&&window.FORGE_ANDROID_BACK())===true",value->{if(!"true".equals(value)){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();}});
+              }});
+            }
+            @Override protected void onPause(){ flushState(); super.onPause(); }
+            @Override protected void onStop(){ flushState(); super.onStop(); }
+            private void flushState(){ if(getBridge()!=null)getBridge().eval("window.FORGE_FLUSH_STATE&&window.FORGE_FLUSH_STATE()",null); }
+            private void status(String message){ if(getBridge()!=null)getBridge().eval("window.FORGE_NATIVE_STATUS("+JSONObject.quote(message)+")",null); }
+            public class ForgeAscentAndroidBridge {
+              @JavascriptInterface public void exportJson(String json,String filename){ pendingExport=json==null?"":json; final String safe=(filename==null||filename.trim().isEmpty())?"forge-ascent-v2-backup.json":filename.replaceAll("[^A-Za-z0-9._-]","_"); runOnUiThread(()->createDocumentLauncher.launch(safe)); }
+              @JavascriptInterface public void importJson(){ runOnUiThread(()->openDocumentLauncher.launch(new String[]{"application/json","text/json","text/plain"})); }
+            }
+          }
+          JAVA
+          grep -q 'MAX_BACKUP_BYTES' "$MAIN"
+          grep -q 'onPause' "$MAIN"
+          grep -q 'onStop' "$MAIN"
+          grep -q 'FORGE_FLUSH_STATE' "$MAIN"
+      - name: Harden Gradle timeout
+        run: |
+          sed -i '/^networkTimeout=/d' android/gradle/wrapper/gradle-wrapper.properties
+          echo 'networkTimeout=60000' >> android/gradle/wrapper/gradle-wrapper.properties
+      - name: Set Android version and optional persistent signing
+        run: |
+          sed -i 's/versionCode 1/versionCode 36/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.16"/' android/app/build.gradle
+          if [ -n "$FA_KEYSTORE_B64" ] && [ -n "$FA_KEYSTORE_PASSWORD" ] && [ -n "$FA_KEY_ALIAS" ] && [ -n "$FA_KEY_PASSWORD" ]; then
+            echo "$FA_KEYSTORE_B64" | base64 --decode > android/app/forge-ascent-release.jks
+            python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/build.gradle');s=p.read_text()
+          s=s.replace('android {','''android {\n    signingConfigs {\n        release {\n            storeFile file("forge-ascent-release.jks")\n            storePassword System.getenv("FA_KEYSTORE_PASSWORD")\n            keyAlias System.getenv("FA_KEY_ALIAS")\n            keyPassword System.getenv("FA_KEY_PASSWORD")\n        }\n    }''',1)
+          s=s.replace('buildTypes {\n        release {','buildTypes {\n        release {\n            signingConfig signingConfigs.release',1);p.write_text(s)
+          PY
+            echo 'FORGE_ASCENT_SIGNED=1' >> "$GITHUB_ENV"
+          else
+            echo 'FORGE_ASCENT_SIGNED=0' >> "$GITHUB_ENV"
+          fi
+      - name: Sync and build
+        run: |
+          npx cap sync android
+          cd android && chmod +x gradlew
+          if [ "$FORGE_ASCENT_SIGNED" = "1" ]; then ./gradlew assembleRelease --stacktrace; else ./gradlew assembleDebug --stacktrace; fi
+      - name: Verify exact APK lifecycle assets
+        run: |
+          if [ "$FORGE_ASCENT_SIGNED" = "1" ]; then APK=android/app/build/outputs/apk/release/app-release.apk; else APK=android/app/build/outputs/apk/debug/app-debug.apk; fi
+          test -f "$APK"
+          unzip -p "$APK" assets/public/app.js > /tmp/apk-app.js
+          grep -q 'BACKUP_MAX_BYTES=5\*1024\*1024' /tmp/apk-app.js
+          grep -q 'FORGE_FLUSH_STATE' /tmp/apk-app.js
+          unzip -l "$APK" | grep -q 'classes.dex'
+          cp "$APK" FORGE_ASCENT_v2.0.16-native.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FORGE_ASCENT_v2.0.16_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.16-native.apk
+          retention-days: 30

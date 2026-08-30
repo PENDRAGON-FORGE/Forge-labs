@@ -96,8 +96,8 @@ jobs:
                 getBridge().eval("(window.FORGE_ANDROID_BACK&&window.FORGE_ANDROID_BACK())===true",value->{if(!"true".equals(value)){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();}});
               }});
             }
-            @Override protected void onPause(){ flushState(); super.onPause(); }
-            @Override protected void onStop(){ flushState(); super.onStop(); }
+            @Override public void onPause(){ flushState(); super.onPause(); }
+            @Override public void onStop(){ flushState(); super.onStop(); }
             private void flushState(){ if(getBridge()!=null)getBridge().eval("window.FORGE_FLUSH_STATE&&window.FORGE_FLUSH_STATE()",null); }
             private void status(String message){ if(getBridge()!=null)getBridge().eval("window.FORGE_NATIVE_STATUS("+JSONObject.quote(message)+")",null); }
             public class ForgeAscentAndroidBridge {
@@ -107,8 +107,8 @@ jobs:
           }
           JAVA
           grep -q 'MAX_BACKUP_BYTES' "$MAIN"
-          grep -q 'onPause' "$MAIN"
-          grep -q 'onStop' "$MAIN"
+          grep -q 'public void onPause' "$MAIN"
+          grep -q 'public void onStop' "$MAIN"
           grep -q 'FORGE_FLUSH_STATE' "$MAIN"
       - name: Harden Gradle timeout
         run: |

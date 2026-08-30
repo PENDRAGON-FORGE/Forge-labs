@@ -1,0 +1,76 @@
+name: Build FORGE ASCENT v2.0.14 AUDIT
+on:
+  pull_request:
+    branches: ["forge-ascent-v206-ci-base"]
+    paths: ["apps/forge-ascent/**", ".github/workflows/build-forge-ascent-v214.yml"]
+  workflow_dispatch:
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/forge-ascent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Restore verified web bundle
+        run: |
+          rm -rf www bundle-v2.b64 bundle-v2.zip
+          cat payload-v2/p01.b64 payload-v2/q02.b64 payload-v2/q03.b64 payload-v2/q04.b64 payload-v2/t05_1.b64 payload-v2/t05_2.b64 payload-v2/t05_3.b64 payload-v2/t05_4.b64 payload-v2/s06a.b64 payload-v2/s06b.b64 payload-v2/s07a.b64 payload-v2/s07b.b64 > bundle-v2.b64
+          base64 --decode bundle-v2.b64 > bundle-v2.zip
+          echo "b04029b6579866ac171f50a6765d30019d576f5a1c88ccaf89ad2eea49bf40ab  bundle-v2.zip" | sha256sum -c -
+          mkdir -p www && unzip -q bundle-v2.zip -d www
+      - name: Apply v2.0.14 audit patch
+        run: python3 audit_v214.py
+      - name: Syntax and long-term gates
+        run: |
+          node --check www/app.js
+          node --check www/data-store.js
+          grep -q 'function adherenceStats()' www/app.js
+          grep -q 'function renderProgramStatus()' www/app.js
+          grep -q 'Adherencia en semanas cerradas' www/app.js
+          grep -q 'El programa de 24 semanas ya está cerrado' www/app.js
+          grep -q 'new Set(out.progression.completedWeeks.map(Number)' www/data-store.js
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Add Android platform
+        run: npx cap add android
+      - name: Harden Gradle timeout
+        run: |
+          sed -i '/^networkTimeout=/d' android/gradle/wrapper/gradle-wrapper.properties
+          echo 'networkTimeout=60000' >> android/gradle/wrapper/gradle-wrapper.properties
+      - name: Set Android version
+        run: |
+          sed -i 's/versionCode 1/versionCode 34/' android/app/build.gradle
+          sed -i 's/versionName "1.0"/versionName "2.0.14"/' android/app/build.gradle
+      - name: Sync and build
+        run: |
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+      - name: Verify exact APK long-term assets
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -p "$APK" assets/public/app.js > /tmp/apk-app.js
+          unzip -p "$APK" assets/public/data-store.js > /tmp/apk-store.js
+          grep -q 'function adherenceStats()' /tmp/apk-app.js
+          grep -q 'programStatusPanel' /tmp/apk-app.js
+          grep -q 'Adherencia en semanas cerradas' /tmp/apk-app.js
+          grep -q 'El programa de 24 semanas ya está cerrado' /tmp/apk-app.js
+          grep -q 'new Set(out.progression.completedWeeks.map(Number)' /tmp/apk-store.js
+          grep -q 'xpEarned=Math.max(0,newCredit-priorCredit)' /tmp/apk-app.js
+          echo 'Exact APK long-term assets PASS'
+      - name: Copy APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FORGE_ASCENT_v2.0.14-native.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FORGE_ASCENT_v2.0.14_NATIVE_APK
+          path: apps/forge-ascent/FORGE_ASCENT_v2.0.14-native.apk
+          retention-days: 30

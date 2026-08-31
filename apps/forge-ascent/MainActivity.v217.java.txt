@@ -1,0 +1,55 @@
+package com.pendragonforge.forgeascent.v2;
+
+import android.os.Bundle;
+import android.webkit.JavascriptInterface;
+import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import com.getcapacitor.BridgeActivity;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
+
+public class MainActivity extends BridgeActivity {
+  private static final int MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+  private ActivityResultLauncher<String> createDocumentLauncher;
+  private ActivityResultLauncher<String[]> openDocumentLauncher;
+  private String pendingExport = "";
+
+  @Override protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    createDocumentLauncher = registerForActivityResult(new ActivityResultContracts.CreateDocument("application/json"), uri -> {
+      if (uri == null) { status("Exportación cancelada."); return; }
+      try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+        if (out == null) throw new IllegalStateException("No output stream");
+        out.write(pendingExport.getBytes(StandardCharsets.UTF_8)); out.flush(); status("Respaldo exportado correctamente.");
+      } catch (Exception ex) { status("No se pudo guardar el respaldo."); }
+      finally { pendingExport = ""; }
+    });
+    openDocumentLauncher = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
+      if (uri == null) { status("Importación cancelada."); return; }
+      try (InputStream in = getContentResolver().openInputStream(uri)) {
+        if (in == null) throw new IllegalStateException("No input stream");
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); byte[] buffer = new byte[8192]; int n,total=0;
+        while ((n = in.read(buffer)) != -1) { total += n; if (total > MAX_BACKUP_BYTES) { status("Respaldo demasiado grande: máximo 5 MB."); return; } bytes.write(buffer,0,n); }
+        String text = bytes.toString(StandardCharsets.UTF_8.name());
+        getBridge().eval("window.FORGE_NATIVE_IMPORT(" + JSONObject.quote(text) + ")", null);
+      } catch (Exception ex) { status("No se pudo leer el respaldo seleccionado."); }
+    });
+    if (getBridge()!=null && getBridge().getWebView()!=null) getBridge().getWebView().addJavascriptInterface(new ForgeAscentAndroidBridge(),"ForgeAscentAndroid");
+    getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){@Override public void handleOnBackPressed(){
+      if(getBridge()==null){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();return;}
+      getBridge().eval("(window.FORGE_ANDROID_BACK&&window.FORGE_ANDROID_BACK())===true",value->{if(!"true".equals(value)){setEnabled(false);getOnBackPressedDispatcher().onBackPressed();}});
+    }});
+  }
+  @Override public void onPause(){ flushState(); super.onPause(); }
+  @Override public void onStop(){ flushState(); super.onStop(); }
+  private void flushState(){ if(getBridge()!=null)getBridge().eval("window.FORGE_FLUSH_STATE&&window.FORGE_FLUSH_STATE()",null); }
+  private void status(String message){ if(getBridge()!=null)getBridge().eval("window.FORGE_NATIVE_STATUS("+JSONObject.quote(message)+")",null); }
+  public class ForgeAscentAndroidBridge {
+    @JavascriptInterface public void exportJson(String json,String filename){ pendingExport=json==null?"":json; final String safe=(filename==null||filename.trim().isEmpty())?"forge-ascent-v2-backup.json":filename.replaceAll("[^A-Za-z0-9._-]","_"); runOnUiThread(()->createDocumentLauncher.launch(safe)); }
+    @JavascriptInterface public void importJson(){ runOnUiThread(()->openDocumentLauncher.launch(new String[]{"application/json","text/json","text/plain"})); }
+  }
+}
